@@ -19,6 +19,8 @@ TalkMile is an Android-first Flutter application for spoken English practice. It
 4. In TalkMile Settings, enter your HTTPS Worker endpoint ending in `/v1/reply` and the access token. This setup step is outside the voice-only learning flow.
 5. Choose a companion, allow microphone access while the app is visible, and start a conversation while safely parked.
 
+Release builds are never signed with the debug key. To sign a release, set `TALKMILE_KEYSTORE`, `TALKMILE_STORE_PASSWORD`, `TALKMILE_KEY_ALIAS`, and `TALKMILE_KEY_PASSWORD` in your local environment before `flutter build appbundle --release`. Keep the keystore and credentials outside source control.
+
 The Worker requires a private token, so this setup is for a personal MVP. **Do not publish this app and shared token for public use.** A public release needs per-user or per-installation authentication backed by device attestation, an atomic quota limiter, and abuse monitoring. There is no registration flow or release-safe token provisioning yet.
 
 ## Architecture and implementation order
