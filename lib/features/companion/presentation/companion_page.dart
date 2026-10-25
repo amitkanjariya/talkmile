@@ -20,8 +20,7 @@ class _CompanionPageState extends State<CompanionPage> {
   Future<void> preview(String partner) async {
     try {
       final voice = GetIt.I<VoiceService>();
-      final message = await voice.selectVoice(partner);
-      await voice.preview(partner);
+      final message = await voice.preview(partner);
       if (mounted) setState(() => notice = message);
     } catch (error) {
       if (mounted) {

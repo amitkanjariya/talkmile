@@ -14,6 +14,10 @@ Android `SpeechRecognizer` is intended for bounded recognition turns, not perpet
 
 The `en-IN` locale is a preference, not a guarantee of accent. TTS engines expose vendor-specific voice names but no reliable male/female field. TalkMile makes a best-effort choice and reports fallback voices.
 
+## Android 16 device check (CPH2731)
+
+The debug APK installed and opened on a physical Android 16 phone. The onboarding microphone request displayed the Android permission dialog; denying it left a usable Continue path. After granting microphone access, Settings reported **Microphone: Allowed**. Home, Settings, the companion selector, the unconfigured-gateway conversation state, and the empty Progress screen were inspected through the device UI. The conversation state showed a setup message and an Open settings action. After installing the updated APK, the Mira voice preview completed and reported the installed `en-IN-language` voice with no reliable gender label. Audible voice quality was not assessed. Notifications remained **Not allowed**; without a configured gateway, the foreground-session permission prompt and live speech loop could not be reached. No Bluetooth, call-interruption, or locked-screen claim is based on this check.
+
 ## Learning data limits
 
 The progress page reports measured session time, speaking turns, practice days, AI-marked completed story chapters, and vocabulary/correction items from actual AI responses. A chapter count depends on the structured AI signal and should be treated as a learning activity count, not an independently verified educational assessment. Pronunciation scores are not computed. Spoken settings changes remain pending.
