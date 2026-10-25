@@ -13,7 +13,17 @@ class CompanionVoice {
   final bool isVerified;
 }
 
-class VoiceService {
+abstract interface class VoicePort {
+  set onNotificationStop(void Function()? callback);
+  Future<void> initialize();
+  Future<String> selectVoice(String partner);
+  Future<void> startVisibleSession();
+  Future<void> speak(String text, {double rate});
+  Future<String?> listen();
+  Future<void> stop();
+}
+
+class VoiceService implements VoicePort {
   final SpeechToText _speech = SpeechToText();
   final FlutterTts _tts = FlutterTts();
   static const _session = MethodChannel('talkmile/session');
@@ -21,6 +31,7 @@ class VoiceService {
   String _partial = '';
   bool _ready = false;
   bool _stopped = false;
+  @override
   void Function()? onNotificationStop;
 
   VoiceService() {
@@ -29,6 +40,7 @@ class VoiceService {
     });
   }
 
+  @override
   Future<void> initialize() async {
     if (_ready) return;
     _ready = await _speech.initialize(
@@ -49,6 +61,7 @@ class VoiceService {
     await _tts.setLanguage('en-IN');
   }
 
+  @override
   Future<void> startVisibleSession() async {
     _stopped = false;
     await _session.invokeMethod<void>('start');
@@ -73,6 +86,7 @@ class VoiceService {
         .toList();
   }
 
+  @override
   Future<String> selectVoice(String partner) async {
     final voices = await availableVoices();
     if (voices.isEmpty) {
@@ -91,6 +105,7 @@ class VoiceService {
         : 'Using ${selected.name}. Voice gender and accent depend on the installed TTS engine.';
   }
 
+  @override
   Future<void> speak(String text, {double rate = .48}) async {
     if (_stopped) return;
     await _speech.stop();
@@ -98,6 +113,7 @@ class VoiceService {
     await _tts.speak(text);
   }
 
+  @override
   Future<String?> listen() async {
     if (_stopped) return null;
     if (_turn != null) throw StateError('A listening turn is already active.');
@@ -135,6 +151,7 @@ class VoiceService {
     if (turn != null && !turn.isCompleted) turn.complete(words);
   }
 
+  @override
   Future<void> stop() async {
     _stopped = true;
     _finishTurn(null);

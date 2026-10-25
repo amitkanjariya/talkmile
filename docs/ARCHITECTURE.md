@@ -13,7 +13,7 @@ Material 3 is customized with Deep Ink `#101923`, Midnight `#192633`, Warm Porce
 - **View:** Flutter pages and reusable brand components. Widgets dispatch actions and render state.
 - **ViewModel:** `SettingsCubit` and `ConversationCubit` own user actions and state transitions.
 - **Model:** `ConversationState`, `CoachResponse`, and `VoiceCommand` describe the domain.
-- **Data:** `VoiceService`, `AiGateway`, `LocalStore`, Android `SessionService`, and the Cloudflare Worker isolate platform, network, and storage behavior.
+- **Data:** `VoiceService`, `AiGateway`, `LocalStore`, Android `SessionService`, and the Cloudflare Worker isolate platform, network, and storage behavior. The conversation coordinator depends on `VoicePort` and `AiGatewayPort` so its stop and silence paths can be tested without device or network services.
 - **Dependency injection:** `get_it` provides single application-scoped service instances; pages obtain BLoCs from `BlocProvider`.
 
 ## Conversation states

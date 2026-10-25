@@ -2,7 +2,20 @@ import 'package:dio/dio.dart';
 import 'package:talkmile/core/data/local_store.dart';
 import 'package:talkmile/features/conversation/domain/conversation_models.dart';
 
-class AiGateway {
+abstract interface class AiGatewayPort {
+  Future<CoachResponse> reply({
+    required LocalStore store,
+    required String utterance,
+    required String mode,
+    required String difficulty,
+    required String corrections,
+    required String storyState,
+    required List<Map<String, String>> recentTurns,
+    required CancelToken cancelToken,
+  });
+}
+
+class AiGateway implements AiGatewayPort {
   AiGateway([Dio? dio])
     : _dio =
           dio ??
@@ -15,6 +28,7 @@ class AiGateway {
           );
   final Dio _dio;
 
+  @override
   Future<CoachResponse> reply({
     required LocalStore store,
     required String utterance,

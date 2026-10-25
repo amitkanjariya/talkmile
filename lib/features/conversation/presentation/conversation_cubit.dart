@@ -16,11 +16,12 @@ class ConversationCubit extends Cubit<ConversationState> {
   }) : super(const ConversationState()) {
     voice.onNotificationStop = stop;
   }
-  final VoiceService voice;
-  final AiGateway gateway;
+  final VoicePort voice;
+  final AiGatewayPort gateway;
   final LocalStore store;
   final List<Map<String, String>> _recent = [];
   CancelToken? _request;
+  Future<void>? _stopping;
   Timer? _timer;
   DateTime? _startedAt;
   int _generation = 0;
@@ -56,8 +57,12 @@ class ConversationCubit extends Cubit<ConversationState> {
       await voice.initialize();
       if (generation != _generation) return false;
       final notice = await voice.selectVoice(store.companion);
-      await voice.startVisibleSession();
       if (generation != _generation) return false;
+      await voice.startVisibleSession();
+      if (generation != _generation) {
+        await voice.stop();
+        return false;
+      }
       _startedAt = DateTime.now();
       _timer?.cancel();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -236,7 +241,15 @@ class ConversationCubit extends Cubit<ConversationState> {
     emit(state.copyWith(phase: SessionPhase.error, status: message));
   }
 
-  Future<void> stop() async {
+  Future<void> stop() {
+    final inProgress = _stopping;
+    if (inProgress != null) return inProgress;
+    final task = _stopOnce();
+    _stopping = task;
+    return task.whenComplete(() => _stopping = null);
+  }
+
+  Future<void> _stopOnce() async {
     if (state.phase == SessionPhase.stopped || state.phase == SessionPhase.idle) {
       return;
     }
