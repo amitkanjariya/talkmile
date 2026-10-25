@@ -44,7 +44,7 @@ class SessionService : Service() {
         val openAction = PendingIntent.getActivity(this, 2, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("TalkMile conversation")
             .setContentText("Microphone session active")
             .setContentIntent(openAction)

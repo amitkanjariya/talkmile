@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
+import 'package:talkmile/core/audio/voice_service.dart';
 import 'package:talkmile/core/data/local_store.dart';
 import 'package:talkmile/core/theme/app_theme.dart';
 import 'package:talkmile/core/widgets/brand.dart';
@@ -121,6 +122,24 @@ class _SettingsPageState extends State<SettingsPage> {
             Text(message!, style: const TextStyle(color: AppColors.brass)),
           const SizedBox(height: 26),
           const SectionLabel('Privacy'),
+          const SizedBox(height: 12),
+          FutureBuilder<Map<String, bool>>(
+            future: GetIt.I<VoiceService>().permissionStatus(),
+            builder: (context, snapshot) {
+              final status = snapshot.data;
+              if (status == null) {
+                return const Text('Checking microphone and notification permissions…',
+                    style: TextStyle(color: AppColors.muted));
+              }
+              return Column(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Microphone: ${status['microphone'] == true ? 'Allowed' : 'Not allowed'}'),
+                  Text('Notifications: ${status['notification'] == true ? 'Allowed' : 'Not allowed'}'),
+                  TextButton(onPressed: GetIt.I<VoiceService>().openAppSettings,
+                    child: const Text('Open Android app permissions')),
+                ]);
+            },
+          ),
           const SizedBox(height: 12),
           const Text(
             'Speech recognition is provided by your Android speech engine. It may send audio to its provider. TalkMile does not store raw audio.',

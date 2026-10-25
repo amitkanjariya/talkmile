@@ -8,7 +8,7 @@ The Worker token is a single manually provisioned bearer secret for personal use
 
 ## Android limitations
 
-The foreground service is started only after the visible app receives microphone permission. It shows an ongoing notification and a Stop action. The service keeps the session process visible to Android, but speech recognition remains owned by the Flutter plugin. **Locked-screen recognition is not verified and may stop on some devices or engines.** A persistent notification alone does not guarantee that recognition works under screen lock. The implementation does not bypass battery restrictions or silently restart the microphone.
+The foreground service is started only after the visible app receives microphone permission and notification permission where Android requires it. It shows an ongoing notification and a Stop action. Settings reports both permission states and links to Android app settings. The service keeps the session process visible to Android, but speech recognition remains owned by the Flutter plugin. **Locked-screen recognition is not verified and may stop on some devices or engines.** A persistent notification alone does not guarantee that recognition works under screen lock. The implementation does not bypass battery restrictions or silently restart the microphone.
 
 Android `SpeechRecognizer` is intended for bounded recognition turns, not perpetual capture. Bluetooth audio routing, audio focus during calls, process-death recovery, and Android 13–15 physical-device lock-screen behavior still need implementation and real-device validation. The app should be used while parked for setup. During a ride, the learner should not read or touch the screen.
 

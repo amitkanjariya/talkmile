@@ -63,9 +63,22 @@ class VoiceService implements VoicePort {
 
   @override
   Future<void> startVisibleSession() async {
+    final notificationAllowed = await _session.invokeMethod<bool>(
+      'requestNotificationPermission',
+    );
+    if (notificationAllowed != true) {
+      throw StateError('Allow notifications to show the active microphone session.');
+    }
     _stopped = false;
     await _session.invokeMethod<void>('start');
   }
+
+  Future<Map<String, bool>> permissionStatus() async {
+    final raw = await _session.invokeMapMethod<String, bool>('permissionStatus');
+    return raw ?? const {'microphone': false, 'notification': false};
+  }
+
+  Future<void> openAppSettings() => _session.invokeMethod<void>('openAppSettings');
 
   Future<List<CompanionVoice>> availableVoices() async {
     await initialize();
