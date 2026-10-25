@@ -114,6 +114,7 @@ class ConversationCubit extends Cubit<ConversationState> {
           'storyState': _storyState,
           'topic': state.topic,
         });
+        await store.recordInsights(reply.vocabulary, reply.correction);
         _remember(utterance, _lastSpeech);
         emit(
           state.copyWith(

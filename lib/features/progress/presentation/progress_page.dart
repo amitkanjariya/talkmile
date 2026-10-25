@@ -6,19 +6,26 @@ import 'package:talkmile/core/widgets/brand.dart';
 
 class ProgressPage extends StatelessWidget {
   const ProgressPage({super.key});
+
+  Future<(ProgressSummary, LearningInsights)> _load() async {
+    final store = GetIt.I<LocalStore>();
+    return (await store.progress(), await store.insights());
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: const Text('Your progress'),
       backgroundColor: Colors.transparent,
     ),
-    body: FutureBuilder<ProgressSummary>(
-      future: GetIt.I<LocalStore>().progress(),
+    body: FutureBuilder<(ProgressSummary, LearningInsights)>(
+      future: _load(),
       builder: (context, snapshot) {
-        final progress = snapshot.data;
-        if (progress == null) {
+        final data = snapshot.data;
+        if (data == null) {
           return const Center(child: CircularProgressIndicator());
         }
+        final (progress, insights) = data;
         return ListView(
           padding: const EdgeInsets.all(24),
           children: [
@@ -59,10 +66,33 @@ class ProgressPage extends StatelessWidget {
               style: const TextStyle(color: AppColors.muted, height: 1.5),
             ),
             const SizedBox(height: 18),
-            const Text(
-              'Vocabulary and grammar summaries will appear when verified session insights are available.',
-              style: TextStyle(color: AppColors.muted, height: 1.5),
-            ),
+            const SectionLabel('Practised vocabulary'),
+            const SizedBox(height: 12),
+            if (insights.vocabulary.isEmpty)
+              const Text('Words introduced during your conversations will appear here.',
+                  style: TextStyle(color: AppColors.muted))
+            else
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final word in insights.vocabulary.keys.take(12))
+                  Chip(label: Text(word)),
+              ]),
+            const SizedBox(height: 24),
+            const SectionLabel('Grammar improvements'),
+            const SizedBox(height: 12),
+            if (insights.corrections.isEmpty)
+              const Text('Helpful corrections will appear after your coach notices a meaningful mistake.',
+                  style: TextStyle(color: AppColors.muted))
+            else
+              for (final correction in insights.corrections.take(3))
+                Card(child: Padding(padding: const EdgeInsets.all(16),
+                  child: Text(correction))),
+            if (insights.corrections.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              const SectionLabel('Try next'),
+              const SizedBox(height: 10),
+              Text('Use “${insights.corrections.first}” in your next conversation.',
+                style: const TextStyle(color: AppColors.muted, height: 1.5)),
+            ],
           ],
         );
       },

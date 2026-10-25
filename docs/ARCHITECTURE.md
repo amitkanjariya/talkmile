@@ -32,4 +32,4 @@ The domain enum also reserves `temporarilyPaused` and `recovering` for Android i
 
 Speech recognition returns text to `ConversationCubit`. The gateway receives a short recent history and compact story summary, with a versioned system prompt stored only on the Worker. Gemini returns structured JSON. The client validates it, speaks only the text fields, and saves compact story context. Progress counters are updated when a session ends or fails.
 
-No transcript or audio is written to SQLite. The story context is stored through `flutter_secure_storage`; practice totals use Drift/SQLite. Deleting learning data clears both.
+No transcript or audio is written to SQLite. Story context, vocabulary, and meaningful corrections are stored through `flutter_secure_storage`; practice totals use Drift/SQLite. Deleting learning data clears both.

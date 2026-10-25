@@ -16,7 +16,7 @@ The `en-IN` locale is a preference, not a guarantee of accent. TTS engines expos
 
 ## Learning data limits
 
-The progress page reports only measured session time, speaking turns, and practice days. Story chapters, vocabulary trends, grammar trends, pronunciation scores, and personalized recommendations are not yet computed. They must remain absent or explicitly marked unavailable until backed by real saved data. Onboarding voice navigation and spoken settings changes are also pending.
+The progress page reports only measured session time, speaking turns, practice days, and vocabulary/correction items from actual AI responses. Story chapters and pronunciation scores are not yet computed. They must remain absent or explicitly marked unavailable until backed by real saved data. Onboarding voice navigation and spoken settings changes are also pending.
 
 ## Costs
 

@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Keeps aggregate progress in SQLite. Conversation text and gateway credentials
 /// live in Android-backed secure storage, never in the unencrypted database.
 class LocalStore extends GeneratedDatabase {
-  LocalStore() : super(driftDatabase(name: 'talkmile'));
+  LocalStore([QueryExecutor? executor]) : super(executor ?? driftDatabase(name: 'talkmile'));
 
   static const _secure = FlutterSecureStorage();
   late final SharedPreferences _preferences;
@@ -76,6 +76,49 @@ class LocalStore extends GeneratedDatabase {
   Future<void> saveStory(Map<String, dynamic> story) =>
       _secure.write(key: 'storyState', value: jsonEncode(story));
 
+  Future<LearningInsights> insights() async {
+    final raw = await _secure.read(key: 'learningInsights');
+    if (raw == null) return const LearningInsights();
+    try {
+      final data = jsonDecode(raw);
+      if (data is! Map<String, dynamic>) return const LearningInsights();
+      final vocabulary = data['vocabulary'];
+      final corrections = data['corrections'];
+      return LearningInsights(
+        vocabulary: vocabulary is Map
+            ? vocabulary.map((key, value) => MapEntry('$key', value is int ? value : 0))
+            : const {},
+        corrections: corrections is List
+            ? corrections.whereType<String>().toList()
+            : const [],
+      );
+    } catch (_) {
+      return const LearningInsights();
+    }
+  }
+
+  Future<void> recordInsights(List<String> words, String? correction) async {
+    if (words.isEmpty && (correction == null || correction.isEmpty)) return;
+    final current = await insights();
+    final vocabulary = Map<String, int>.of(current.vocabulary);
+    for (final word in words.take(5)) {
+      final cleaned = word.trim().toLowerCase();
+      if (cleaned.isEmpty || cleaned.length > 50) continue;
+      vocabulary[cleaned] = (vocabulary[cleaned] ?? 0) + 1;
+    }
+    final corrections = List<String>.of(current.corrections);
+    if (correction != null && correction.trim().isNotEmpty) {
+      final cleaned = correction.trim();
+      if (!corrections.contains(cleaned)) corrections.insert(0, cleaned);
+    }
+    final ranked = vocabulary.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    await _secure.write(key: 'learningInsights', value: jsonEncode({
+      'vocabulary': Map.fromEntries(ranked.take(100)),
+      'corrections': corrections.take(30).toList(),
+    }));
+  }
+
   Future<void> addPractice(
     Duration duration,
     int turns, {
@@ -114,7 +157,17 @@ class LocalStore extends GeneratedDatabase {
   Future<void> deleteLearningData() async {
     await customStatement('DELETE FROM practice_day');
     await _secure.delete(key: 'storyState');
+    await _secure.delete(key: 'learningInsights');
   }
+}
+
+class LearningInsights {
+  const LearningInsights({
+    this.vocabulary = const {},
+    this.corrections = const [],
+  });
+  final Map<String, int> vocabulary;
+  final List<String> corrections;
 }
 
 class ProgressSummary {
