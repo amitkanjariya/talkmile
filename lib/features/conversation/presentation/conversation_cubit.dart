@@ -28,6 +28,7 @@ class ConversationCubit extends Cubit<ConversationState> {
   String _lastSpeech = '';
   String _lastCorrection = '';
   String _storyState = '';
+  int _chapters = 0;
 
   bool get active => switch (state.phase) {
     SessionPhase.idle || SessionPhase.stopped || SessionPhase.error => false,
@@ -46,6 +47,7 @@ class ConversationCubit extends Cubit<ConversationState> {
       return false;
     }
     final generation = ++_generation;
+    _chapters = 0;
     emit(
       ConversationState(
         phase: SessionPhase.initializing,
@@ -103,7 +105,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         final reply = await gateway.reply(
           store: store,
           utterance: utterance,
-          mode: store.mode,
+          mode: topic == 'Continue previous story' ? 'story' : store.mode,
           difficulty: store.difficulty,
           corrections: store.correctionFrequency,
           storyState: _storyState,
@@ -115,6 +117,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         _storyState = reply.storyState;
         _lastCorrection = reply.correction ?? '';
         _lastSpeech = reply.speech;
+        if (reply.chapterCompleted) _chapters++;
         await store.saveStory({
           'storyState': _storyState,
           'topic': state.topic,
@@ -235,6 +238,7 @@ class ConversationCubit extends Cubit<ConversationState> {
       await store.addPractice(
         DateTime.now().difference(_startedAt!),
         state.turns,
+        chapters: _chapters,
       );
       _startedAt = null;
     }
@@ -260,7 +264,9 @@ class ConversationCubit extends Cubit<ConversationState> {
     final duration = _startedAt == null
         ? Duration.zero
         : DateTime.now().difference(_startedAt!);
-    if (duration.inSeconds > 0) await store.addPractice(duration, state.turns);
+    if (duration.inSeconds > 0) {
+      await store.addPractice(duration, state.turns, chapters: _chapters);
+    }
     _startedAt = null;
     emit(
       state.copyWith(

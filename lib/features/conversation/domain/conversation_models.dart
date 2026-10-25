@@ -20,6 +20,7 @@ class CoachResponse {
     required this.difficulty,
     this.correction,
     this.vocabulary = const [],
+    this.chapterCompleted = false,
   });
   final String spokenText;
   final String nextQuestion;
@@ -27,6 +28,7 @@ class CoachResponse {
   final String difficulty;
   final String? correction;
   final List<String> vocabulary;
+  final bool chapterCompleted;
 
   factory CoachResponse.fromJson(Object? value) {
     final data = value is String ? jsonDecode(value) : value;
@@ -60,6 +62,7 @@ class CoachResponse {
       vocabulary: data['newVocabulary'] is List
           ? (data['newVocabulary'] as List).whereType<String>().take(5).toList()
           : const [],
+      chapterCompleted: data['chapterCompleted'] == true,
     );
   }
 

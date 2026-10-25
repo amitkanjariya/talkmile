@@ -22,12 +22,14 @@ void main() {
       'nextQuestion': 'What happened next?',
       'correction': {'improved': 'I went to the market.'},
       'storyState': 'The user is at a café.',
+      'chapterCompleted': true,
       'newVocabulary': ['curious'],
       'difficulty': 'beginner',
     });
     expect(reply.speech, 'That sounds interesting. What happened next?');
     expect(reply.correction, 'I went to the market.');
     expect(reply.vocabulary, ['curious']);
+    expect(reply.chapterCompleted, isTrue);
   });
 
   test('AI response rejects missing spoken text', () {

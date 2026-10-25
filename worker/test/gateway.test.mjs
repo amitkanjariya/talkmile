@@ -47,7 +47,8 @@ test('returns validated structured answer without leaking the provider key', asy
     sent = options;
     return Response.json({candidates: [{content: {parts: [{text: JSON.stringify({
       spokenText: 'Hello there.', nextQuestion: 'How was your day?',
-      storyState: '', newVocabulary: [], difficulty: 'intermediate',
+      storyState: '', chapterCompleted: false,
+      newVocabulary: [], difficulty: 'intermediate',
     })}]}}]});
   };
   const response = await gateway.fetch(request(validBody), env);

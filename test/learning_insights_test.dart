@@ -18,6 +18,8 @@ void main() {
     expect(insights.vocabulary['curious'], 2);
     expect(insights.vocabulary['journey'], 1);
     expect(insights.corrections, ['I went to the market.']);
+    await store.addPractice(const Duration(seconds: 65), 2, chapters: 1);
+    expect((await store.progress()).chapters, 1);
     await store.deleteLearningData();
     final cleared = await store.insights();
     expect(cleared.vocabulary, isEmpty);
