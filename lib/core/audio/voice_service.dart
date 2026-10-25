@@ -143,6 +143,12 @@ class VoiceService {
     await _session.invokeMethod<void>('stop');
   }
 
+  Future<void> cancelGuide() async {
+    _finishTurn(null);
+    await _speech.cancel();
+    await _tts.stop();
+  }
+
   Future<void> preview(String partner) async {
     await initialize();
     await selectVoice(partner);

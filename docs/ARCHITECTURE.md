@@ -6,7 +6,7 @@ Material 3 is customized with Deep Ink `#101923`, Midnight `#192633`, Warm Porce
 
 ## Screens
 
-`/welcome` introduces the three-step product flow. `/companion` offers two partner personas and runtime voice previews. `/` is the home dashboard with one primary start action, story continuation, and topic suggestions. `/conversation` reflects session phases and exposes an explicit Stop control. `/progress` shows actual locally recorded totals. `/settings` manages voice, pace, difficulty, corrections, privacy, and gateway setup.
+`/welcome` introduces the three-step product flow with an optional spoken guide and voice navigation. `/companion` offers two partner personas and runtime voice previews. `/` is the home dashboard with one primary start action, story continuation, and topic suggestions. `/conversation` reflects session phases and exposes an explicit Stop control. `/progress` shows actual locally recorded totals. `/settings` manages voice, pace, difficulty, corrections, privacy, and gateway setup.
 
 ## Boundaries
 
