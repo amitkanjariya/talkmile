@@ -1,0 +1,13 @@
+name = "talkmile-gateway"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Choose a currently eligible model from the official Gemini pricing page.
+# Set GEMINI_MODEL as a Worker environment variable in deployment settings.
+# Set GEMINI_API_KEY and TALKMILE_ACCESS_TOKEN with `wrangler secret put`.
+# Never put their values in this file or the Flutter application.
+# DAILY_REQUEST_LIMIT defaults to 100.
+
+[[kv_namespaces]]
+binding = "USAGE"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
