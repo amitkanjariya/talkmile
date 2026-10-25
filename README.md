@@ -27,6 +27,6 @@ See [Architecture](docs/ARCHITECTURE.md) and [Security and platform limits](docs
 
 ## Verification
 
-Run `flutter analyze`, `flutter test`, and `flutter build apk --debug`. No real Gemini calls are made by Flutter tests.
+Run `flutter analyze`, `flutter test`, `flutter build apk --debug`, and `npm test` inside `worker/`. Tests use mock Gemini responses and do not consume real API quota.
 
 Physical-device validation remains necessary for microphone behavior, Bluetooth, incoming calls, lock-screen continuation, and TTS voice quality on Android 13–15 and newer.
