@@ -183,14 +183,14 @@ class VoiceService implements VoicePort {
         },
         listenOptions: SpeechListenOptions(
           localeId: 'en_IN',
-          listenFor: const Duration(seconds: 25),
-          pauseFor: const Duration(seconds: 5),
+          listenFor: const Duration(seconds: 45),
+          pauseFor: const Duration(seconds: 8),
           partialResults: true,
           cancelOnError: false,
         ),
       );
       return await turn.future.timeout(
-        const Duration(seconds: 32),
+        const Duration(seconds: 52),
         onTimeout: () => null,
       );
     } finally {

@@ -7,6 +7,7 @@ import 'package:talkmile/core/data/local_store.dart';
 import 'package:talkmile/core/network/ai_gateway.dart';
 import 'package:talkmile/features/conversation/domain/conversation_models.dart';
 import 'package:talkmile/features/conversation/domain/voice_command.dart';
+import 'package:talkmile/features/home/domain/practice_catalog.dart';
 
 class ConversationCubit extends Cubit<ConversationState> {
   ConversationCubit({
@@ -29,6 +30,8 @@ class ConversationCubit extends Cubit<ConversationState> {
   String _lastCorrection = '';
   String _storyState = '';
   int _chapters = 0;
+  DateTime? _nextCorrectionReview;
+  bool _weeklyVocabularyReview = false;
 
   bool get active => switch (state.phase) {
     SessionPhase.idle || SessionPhase.stopped || SessionPhase.error => false,
@@ -58,7 +61,9 @@ class ConversationCubit extends Cubit<ConversationState> {
     try {
       await voice.initialize();
       if (generation != _generation) return false;
-      final notice = await voice.selectVoice(store.companion);
+      final notice = await voice.selectVoice(
+        personaFor(store.companion).gender,
+      );
       if (generation != _generation) return false;
       await voice.startVisibleSession();
       if (generation != _generation) {
@@ -66,6 +71,8 @@ class ConversationCubit extends Cubit<ConversationState> {
         return false;
       }
       _startedAt = DateTime.now();
+      _nextCorrectionReview = _startedAt!.add(const Duration(minutes: 5));
+      _weeklyVocabularyReview = await store.claimWeeklyVocabularyReview();
       _timer?.cancel();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!isClosed && _startedAt != null) {
@@ -102,17 +109,38 @@ class ConversationCubit extends Cubit<ConversationState> {
           ),
         );
         _request = CancelToken();
+        final correctionReview =
+            _nextCorrectionReview != null &&
+            !DateTime.now().isBefore(_nextCorrectionReview!);
+        if (correctionReview) {
+          _nextCorrectionReview = DateTime.now().add(
+            const Duration(minutes: 5),
+          );
+        }
+        final persona = personaFor(store.companion);
+        final reviewWords = _weeklyVocabularyReview
+            ? _recentVocabularyWords()
+            : const <String>[];
         final reply = await gateway.reply(
           store: store,
           utterance: utterance,
-          mode: topic == 'Continue previous story' ? 'story' : store.mode,
+          mode:
+              topic == 'Continue previous story' ||
+                  topic?.startsWith('Story:') == true
+              ? 'story'
+              : store.mode,
           difficulty: store.difficulty,
           corrections: store.correctionFrequency,
           storyState: _storyState,
+          persona:
+              '${persona.name}, age ${persona.age}, ${persona.gender}, your ${persona.role}; ${persona.style}.',
+          correctionReview: correctionReview,
+          reviewWords: reviewWords,
           recentTurns: _recent,
           cancelToken: _request!,
         );
         _request = null;
+        _weeklyVocabularyReview = false;
         if (generation != _generation) break;
         _storyState = reply.storyState;
         _lastCorrection = reply.correction ?? '';
@@ -180,6 +208,18 @@ class ConversationCubit extends Cubit<ConversationState> {
     } catch (error) {
       if (generation == _generation) await _pauseForError(_message(error));
     }
+  }
+
+  List<String> _recentVocabularyWords() {
+    final today = DateTime.now();
+    final dayIndex =
+        (today.difference(DateTime(2024, 1, 1)).inDays * 10) %
+        vocabularyBank.length;
+    return List.generate(7, (day) {
+      final start = (dayIndex - (day + 1) * 10) % vocabularyBank.length;
+      return vocabularyBank[(start < 0 ? start + vocabularyBank.length : start)]
+          .word;
+    }).take(7).toList();
   }
 
   Future<String> _handleCommand(VoiceCommand command) async {
@@ -254,7 +294,8 @@ class ConversationCubit extends Cubit<ConversationState> {
   }
 
   Future<void> _stopOnce() async {
-    if (state.phase == SessionPhase.stopped || state.phase == SessionPhase.idle) {
+    if (state.phase == SessionPhase.stopped ||
+        state.phase == SessionPhase.idle) {
       return;
     }
     ++_generation;

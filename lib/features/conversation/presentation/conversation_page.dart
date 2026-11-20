@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:talkmile/core/theme/app_theme.dart';
 import 'package:talkmile/core/widgets/brand.dart';
 import 'package:talkmile/features/conversation/domain/conversation_models.dart';
 import 'package:talkmile/features/conversation/presentation/conversation_cubit.dart';
 import 'package:talkmile/features/settings/presentation/settings_cubit.dart';
+import 'package:talkmile/features/home/domain/practice_catalog.dart';
 
 class ConversationPage extends StatelessWidget {
   const ConversationPage({super.key});
@@ -13,9 +13,10 @@ class ConversationPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<ConversationCubit>().state;
-    final partner = context.watch<SettingsCubit>().state.companion == 'male'
-        ? 'Arun'
-        : 'Mira';
+    final partner = personaFor(
+      context.watch<SettingsCubit>().state.companion,
+    ).name;
+    final colors = Theme.of(context).colorScheme;
     final minutes = state.elapsed.inMinutes.toString().padLeft(2, '0');
     final seconds = (state.elapsed.inSeconds % 60).toString().padLeft(2, '0');
     return Scaffold(
@@ -30,9 +31,9 @@ class ConversationPage extends StatelessWidget {
                   const Spacer(),
                   Text(
                     '$minutes:$seconds',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFeatures: [FontFeature.tabularFigures()],
-                      color: AppColors.muted,
+                      color: colors.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -64,7 +65,10 @@ class ConversationPage extends StatelessWidget {
                         ? 'A calm space to practise, one conversation at a time.'
                         : state.spokenText,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.muted, height: 1.5),
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
+                      height: 1.5,
+                    ),
                   ),
                 ),
               ),
@@ -72,7 +76,10 @@ class ConversationPage extends StatelessWidget {
                 Text(
                   state.voiceNotice,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.onSurfaceVariant,
+                  ),
                 ),
               const Spacer(),
               if (state.phase == SessionPhase.error) ...[
@@ -96,19 +103,15 @@ class ConversationPage extends StatelessWidget {
                 )
               else
                 FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.brass,
-                    foregroundColor: AppColors.ink,
-                  ),
                   onPressed: () => context.read<ConversationCubit>().stop(),
                   icon: const Icon(Icons.stop_rounded),
                   label: const Text('End session'),
                 ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Keep your eyes on the road. Use your voice during the session.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.muted),
+                style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
               ),
             ],
           ),
@@ -125,16 +128,17 @@ class _AudioMark extends StatelessWidget {
   Widget build(BuildContext context) {
     final active =
         phase == SessionPhase.listening || phase == SessionPhase.speaking;
+    final colors = Theme.of(context).colorScheme;
     return Container(
       width: 190,
       height: 190,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: active ? AppColors.brass : AppColors.border,
+          color: active ? colors.primary : colors.outlineVariant,
           width: 1.5,
         ),
-        color: AppColors.midnight,
+        color: colors.surface,
       ),
       child: Center(
         child: Row(
@@ -146,7 +150,7 @@ class _AudioMark extends StatelessWidget {
                 height: active ? height.toDouble() : 12,
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
-                  color: active ? AppColors.brass : AppColors.muted,
+                  color: active ? colors.primary : colors.onSurfaceVariant,
                   borderRadius: BorderRadius.circular(5),
                 ),
               ),
