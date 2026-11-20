@@ -56,10 +56,15 @@ class AiGateway implements AiGatewayPort {
     if (words is! List || words.length != 10) {
       throw const FormatException('Daily words are unavailable.');
     }
-    return words
+    final dailyWords = words
         .whereType<Map<String, dynamic>>()
         .map(DailyWord.fromJson)
         .toList();
+    await store.saveDailyWordSet(date, [
+      for (final word in dailyWords)
+        {'word': word.word, 'meaning': word.meaning, 'example': word.example},
+    ]);
+    return dailyWords;
   }
 
   @override

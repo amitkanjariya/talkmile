@@ -106,7 +106,15 @@ class _VocabularyPageState extends State<VocabularyPage> {
   @override
   void initState() {
     super.initState();
-    _words = GetIt.I<AiGateway>().dailyWords(GetIt.I<LocalStore>());
+    final store = GetIt.I<LocalStore>();
+    _words = GetIt.I<AiGateway>().dailyWords(store).catchError((_) async {
+      final fallback = _fallbackWords();
+      await store.saveDailyWordSet(_todayKey(), [
+        for (final word in fallback)
+          {'word': word.word, 'meaning': word.meaning, 'example': word.example},
+      ]);
+      return fallback;
+    });
   }
 
   @override
@@ -165,5 +173,10 @@ class _VocabularyPageState extends State<VocabularyPage> {
       10,
       (i) => vocabularyBank[(index + i) % vocabularyBank.length],
     );
+  }
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 }

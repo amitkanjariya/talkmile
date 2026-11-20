@@ -72,7 +72,7 @@ class ConversationCubit extends Cubit<ConversationState> {
       }
       _startedAt = DateTime.now();
       _nextCorrectionReview = _startedAt!.add(const Duration(minutes: 5));
-      _weeklyVocabularyReview = await store.claimWeeklyVocabularyReview();
+      _weeklyVocabularyReview = await store.shouldReviewWeeklyVocabulary();
       _timer?.cancel();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!isClosed && _startedAt != null) {
@@ -119,7 +119,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         }
         final persona = personaFor(store.companion);
         final reviewWords = _weeklyVocabularyReview
-            ? _recentVocabularyWords()
+            ? await store.weeklyVocabularyWords()
             : const <String>[];
         final reply = await gateway.reply(
           store: store,
@@ -140,8 +140,11 @@ class ConversationCubit extends Cubit<ConversationState> {
           cancelToken: _request!,
         );
         _request = null;
-        _weeklyVocabularyReview = false;
         if (generation != _generation) break;
+        if (_weeklyVocabularyReview) {
+          await store.markWeeklyVocabularyReview();
+          _weeklyVocabularyReview = false;
+        }
         _storyState = reply.storyState;
         _lastCorrection = reply.correction ?? '';
         _lastSpeech = reply.speech;
@@ -208,18 +211,6 @@ class ConversationCubit extends Cubit<ConversationState> {
     } catch (error) {
       if (generation == _generation) await _pauseForError(_message(error));
     }
-  }
-
-  List<String> _recentVocabularyWords() {
-    final today = DateTime.now();
-    final dayIndex =
-        (today.difference(DateTime(2024, 1, 1)).inDays * 10) %
-        vocabularyBank.length;
-    return List.generate(7, (day) {
-      final start = (dayIndex - (day + 1) * 10) % vocabularyBank.length;
-      return vocabularyBank[(start < 0 ? start + vocabularyBank.length : start)]
-          .word;
-    }).take(7).toList();
   }
 
   Future<String> _handleCommand(VoiceCommand command) async {

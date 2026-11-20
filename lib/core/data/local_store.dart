@@ -67,7 +67,7 @@ class LocalStore extends GeneratedDatabase {
   String get themeMode => _preferences.getString('themeMode') ?? 'system';
   Future<void> setThemeMode(String value) =>
       _preferences.setString('themeMode', value);
-  Future<bool> claimWeeklyVocabularyReview() async {
+  Future<bool> shouldReviewWeeklyVocabulary() async {
     final now = DateTime.now();
     final monday = DateTime(now.year, now.month, now.day - now.weekday + 1);
     final key = monday.toIso8601String().substring(0, 10);
@@ -76,9 +76,67 @@ class LocalStore extends GeneratedDatabase {
       await _preferences.setString('lastVocabularyReviewWeek', key);
       return false;
     }
-    if (previous == key) return false;
-    await _preferences.setString('lastVocabularyReviewWeek', key);
-    return true;
+    return previous != key;
+  }
+
+  Future<void> markWeeklyVocabularyReview() async {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day - now.weekday + 1);
+    await _preferences.setString(
+      'lastVocabularyReviewWeek',
+      monday.toIso8601String().substring(0, 10),
+    );
+  }
+
+  Future<void> saveDailyWordSet(
+    String date,
+    List<Map<String, String>> words,
+  ) async {
+    Map<String, dynamic> history = {};
+    final raw = await _secure.read(key: 'dailyWordSets');
+    if (raw != null) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) history = decoded;
+      } catch (_) {}
+    }
+    history[date] = words.take(10).toList();
+    final dates = history.keys.toList()..sort();
+    final removeCount = (dates.length - 14).clamp(0, dates.length).toInt();
+    for (final oldDate in dates.take(removeCount)) {
+      history.remove(oldDate);
+    }
+    await _secure.write(key: 'dailyWordSets', value: jsonEncode(history));
+  }
+
+  Future<List<String>> weeklyVocabularyWords() async {
+    final raw = await _secure.read(key: 'dailyWordSets');
+    if (raw == null) return const [];
+    try {
+      final history = jsonDecode(raw);
+      if (history is! Map<String, dynamic>) return const [];
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final dates =
+          history.keys
+              .whereType<String>()
+              .where((date) => date.compareTo(today) < 0)
+              .toList()
+            ..sort();
+      final result = <String>[];
+      for (final date in dates.reversed.take(7)) {
+        final words = history[date];
+        if (words is List) {
+          for (final entry in words) {
+            if (entry is Map && entry['word'] is String) {
+              result.add(entry['word'] as String);
+            }
+          }
+        }
+      }
+      return result.toSet().take(10).toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   String get gatewayUrl => _preferences.getString('gatewayUrl') ?? '';
@@ -189,6 +247,7 @@ class LocalStore extends GeneratedDatabase {
     await customStatement('DELETE FROM practice_day');
     await _secure.delete(key: 'storyState');
     await _secure.delete(key: 'learningInsights');
+    await _secure.delete(key: 'dailyWordSets');
   }
 }
 
