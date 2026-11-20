@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:talkmile/core/data/local_store.dart';
 import 'package:talkmile/features/conversation/domain/conversation_models.dart';
+import 'package:talkmile/features/home/domain/practice_catalog.dart';
 
 abstract interface class AiGatewayPort {
   Future<CoachResponse> reply({
@@ -10,6 +11,10 @@ abstract interface class AiGatewayPort {
     required String difficulty,
     required String corrections,
     required String storyState,
+    String persona =
+        'Mira, a friendly neighbor in her late twenties; warm and relaxed',
+    bool correctionReview = false,
+    List<String> reviewWords = const [],
     required List<Map<String, String>> recentTurns,
     required CancelToken cancelToken,
   });
@@ -28,6 +33,35 @@ class AiGateway implements AiGatewayPort {
           );
   final Dio _dio;
 
+  Future<List<DailyWord>> dailyWords(LocalStore store) async {
+    final url = store.gatewayUrl;
+    final token = await store.getGatewayToken();
+    if (url.isEmpty || token.isEmpty) {
+      throw StateError('Gateway is not configured.');
+    }
+    final now = DateTime.now();
+    final date =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final configured = Uri.parse(url);
+    final basePath = configured.path
+        .replaceFirst(RegExp(r'/v1/reply/?$'), '')
+        .replaceFirst(RegExp(r'/$'), '');
+    final vocabularyUri = configured.replace(path: '$basePath/v1/vocabulary');
+    final response = await _dio.post<Map<String, dynamic>>(
+      vocabularyUri.toString(),
+      data: {'date': date, 'difficulty': store.difficulty},
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    final words = response.data?['words'];
+    if (words is! List || words.length != 10) {
+      throw const FormatException('Daily words are unavailable.');
+    }
+    return words
+        .whereType<Map<String, dynamic>>()
+        .map(DailyWord.fromJson)
+        .toList();
+  }
+
   @override
   Future<CoachResponse> reply({
     required LocalStore store,
@@ -36,6 +70,10 @@ class AiGateway implements AiGatewayPort {
     required String difficulty,
     required String corrections,
     required String storyState,
+    String persona =
+        'Mira, a friendly neighbor in her late twenties; warm and relaxed',
+    bool correctionReview = false,
+    List<String> reviewWords = const [],
     required List<Map<String, String>> recentTurns,
     required CancelToken cancelToken,
   }) async {
@@ -56,6 +94,9 @@ class AiGateway implements AiGatewayPort {
             'difficulty': difficulty,
             'corrections': corrections,
             'storyState': storyState,
+            'persona': persona,
+            'correctionReview': correctionReview,
+            'reviewWords': reviewWords.take(10).toList(),
             'recentTurns': recentTurns.take(8).toList(),
           },
           options: Options(headers: {'Authorization': 'Bearer $token'}),

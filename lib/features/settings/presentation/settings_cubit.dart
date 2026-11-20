@@ -4,11 +4,12 @@ import 'package:talkmile/core/data/local_store.dart';
 class SettingsState {
   const SettingsState({
     this.ready = false,
-    this.companion = 'female',
+    this.companion = 'mira',
     this.speechRate = .48,
     this.difficulty = 'intermediate',
     this.mode = 'conversation',
     this.correctionFrequency = 'gentle',
+    this.themeMode = 'system',
     this.gatewayUrl = '',
     this.gatewayConfigured = false,
   });
@@ -18,6 +19,7 @@ class SettingsState {
   final String difficulty;
   final String mode;
   final String correctionFrequency;
+  final String themeMode;
   final String gatewayUrl;
   final bool gatewayConfigured;
 }
@@ -34,6 +36,7 @@ class SettingsCubit extends Cubit<SettingsState> {
       difficulty: store.difficulty,
       mode: store.mode,
       correctionFrequency: store.correctionFrequency,
+      themeMode: store.themeMode,
       gatewayUrl: store.gatewayUrl,
       gatewayConfigured:
           store.gatewayUrl.isNotEmpty &&
@@ -63,6 +66,11 @@ class SettingsCubit extends Cubit<SettingsState> {
 
   Future<void> changeCorrections(String value) async {
     await store.setCorrectionFrequency(value);
+    await load();
+  }
+
+  Future<void> changeThemeMode(String value) async {
+    await store.setThemeMode(value);
     await load();
   }
 

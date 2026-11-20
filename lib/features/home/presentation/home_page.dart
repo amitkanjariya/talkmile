@@ -3,9 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talkmile/core/data/local_store.dart';
-import 'package:talkmile/core/theme/app_theme.dart';
 import 'package:talkmile/core/widgets/brand.dart';
 import 'package:talkmile/features/conversation/presentation/conversation_cubit.dart';
+import 'package:talkmile/features/home/domain/practice_catalog.dart';
 import 'package:talkmile/features/settings/presentation/settings_cubit.dart';
 
 class HomePage extends StatelessWidget {
@@ -19,114 +19,119 @@ class HomePage extends StatelessWidget {
         : hour < 17
         ? 'Good afternoon'
         : 'Good evening';
-    final partner = context.watch<SettingsCubit>().state.companion == 'male'
-        ? 'Arun'
-        : 'Mira';
+    final companion = context.watch<SettingsCubit>().state.companion;
+    final coachName = personaFor(companion).name;
+    final theme = Theme.of(context);
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
           children: [
             Row(
               children: [
                 const BrandMark(),
                 const Spacer(),
-                IconButton(
-                  tooltip: 'Progress',
+                TextButton(
                   onPressed: () => context.push('/progress'),
-                  icon: const Icon(Icons.insights_outlined),
+                  child: const Text('Progress'),
                 ),
-                IconButton(
-                  tooltip: 'Settings',
+                TextButton(
                   onPressed: () => context.push('/settings'),
-                  icon: const Icon(Icons.tune_rounded),
+                  child: const Text('Settings'),
                 ),
               ],
             ),
-            const SizedBox(height: 42),
-            const SectionLabel('Your daily practice'),
-            const SizedBox(height: 14),
-            Text(
-              '$greeting.\nLet’s talk.',
-              style: Theme.of(context).textTheme.displayLarge,
+            const SizedBox(height: 38),
+            Text(greeting, style: theme.textTheme.bodyLarge),
+            const SizedBox(height: 5),
+            Text('Let’s talk.', style: theme.textTheme.displayLarge),
+            const SizedBox(height: 25),
+            FilledButton(
+              onPressed: () => _start(context),
+              child: const Text('Start speaking'),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Text(
-              '$partner is ready to listen. Start while safely parked, then keep your eyes on the road.',
-              style: const TextStyle(color: AppColors.muted, height: 1.5),
-            ),
-            const SizedBox(height: 32),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AppColors.midnight,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.graphic_eq_rounded,
-                    color: AppColors.brass,
-                    size: 35,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'A conversation that goes with you',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Stories, real life practice, and a little progress every day.',
-                    style: TextStyle(color: AppColors.muted, height: 1.5),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: () => _start(context),
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Start conversation'),
-                  ),
-                ],
-              ),
+              '$coachName is ready. Use TalkMile while safely parked.',
+              style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 28),
-            const SectionLabel('Pick up where you left off'),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => _start(context, 'Continue previous story'),
-              icon: const Icon(Icons.bookmark_border_rounded),
-              label: const Text('Continue previous story'),
+            _SectionHeading(
+              title: 'Today’s words',
+              action: TextButton(
+                onPressed: () => context.push('/vocabulary'),
+                child: const Text('See all'),
+              ),
             ),
-            const SizedBox(height: 28),
-            const SectionLabel('Try a topic'),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final topic in [
-                  'A job interview',
-                  'An unexpected journey',
-                  'At the café',
-                  'A new business',
-                ])
-                  ActionChip(
-                    label: Text(topic),
-                    onPressed: () => _start(context, topic),
+            _HomeCard(
+              title: '10 words for everyday English',
+              subtitle: 'Learn a few, then use them in a conversation.',
+              onTap: () => context.push('/vocabulary'),
+            ),
+            const SizedBox(height: 24),
+            _SectionHeading(
+              title: 'Choose a conversation',
+              action: TextButton(
+                onPressed: () => context.push('/topics'),
+                child: const Text('All topics'),
+              ),
+            ),
+            _HomeCard(
+              title: 'Everyday topics',
+              subtitle: 'Work, travel, family, and more.',
+              onTap: () => context.push('/topics'),
+            ),
+            const SizedBox(height: 11),
+            _HomeCard(
+              title: 'Stories',
+              subtitle: 'Choose a genre and shape what happens.',
+              onTap: () => context.push('/stories'),
+            ),
+            FutureBuilder<Map<String, dynamic>?>(
+              future: GetIt.I<LocalStore>().readStory(),
+              builder: (context, snapshot) {
+                final saved = snapshot.data;
+                if (saved == null ||
+                    (saved['storyState'] as String? ?? '').isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _HomeCard(
+                    title: 'Continue your story',
+                    subtitle:
+                        saved['topic'] as String? ??
+                        'Pick up where you left off.',
+                    onTap: () => _start(context, 'Continue previous story'),
                   ),
-              ],
+                );
+              },
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 24),
+            _SectionHeading(
+              title: 'Your speaking partner',
+              action: TextButton(
+                onPressed: () => context.push('/companion'),
+                child: const Text('Choose'),
+              ),
+            ),
+            _HomeCard(
+              title: coachName,
+              subtitle: 'Change partner, voice, or conversation style.',
+              onTap: () => context.push('/companion'),
+            ),
+            const SizedBox(height: 24),
             FutureBuilder<ProgressSummary>(
               future: GetIt.I<LocalStore>().progress(),
               builder: (context, snapshot) {
                 final progress = snapshot.data;
+                if (progress == null || progress.seconds == 0) {
+                  return const SizedBox.shrink();
+                }
                 return Text(
-                  progress == null || progress.seconds == 0
-                      ? 'Your practice history will appear here after your first session.'
-                      : '${(progress.seconds / 60).round()} minutes spoken across ${progress.days} days',
-                  style: const TextStyle(color: AppColors.muted),
+                  '${(progress.seconds / 60).round()} minutes spoken · ${progress.days} practice days',
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
                 );
               },
             ),
@@ -137,8 +142,53 @@ class HomePage extends StatelessWidget {
   }
 
   Future<void> _start(BuildContext context, [String? topic]) async {
-    final started = await context.read<ConversationCubit>().start(topic: topic);
+    await context.read<ConversationCubit>().start(topic: topic);
     if (context.mounted) context.push('/conversation');
-    if (!started) return;
   }
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.title, required this.action});
+  final String title;
+  final Widget action;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+      ),
+      action,
+    ],
+  );
+}
+
+class _HomeCard extends StatelessWidget {
+  const _HomeCard({
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 3),
+            Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      ),
+    ),
+  );
 }

@@ -28,11 +28,13 @@ class FakeVoice implements VoicePort {
   Future<void> speak(String text, {double rate = .48}) async {
     spoken.add(text);
   }
+
   @override
   Future<String?> listen() {
     pending = Completer<String?>();
     return pending!.future;
   }
+
   @override
   Future<void> stop() async {
     stops++;
@@ -43,16 +45,27 @@ class FakeVoice implements VoicePort {
 class FakeGateway implements AiGatewayPort {
   int calls = 0;
   @override
-  Future<CoachResponse> reply({required LocalStore store,
-      required String utterance, required String mode,
-      required String difficulty, required String corrections,
-      required String storyState,
-      required List<Map<String, String>> recentTurns,
-      required CancelToken cancelToken}) async {
+  Future<CoachResponse> reply({
+    required LocalStore store,
+    required String utterance,
+    required String mode,
+    required String difficulty,
+    required String corrections,
+    required String storyState,
+    String persona =
+        'Mira, a friendly neighbor in her late twenties; warm and relaxed',
+    bool correctionReview = false,
+    List<String> reviewWords = const [],
+    required List<Map<String, String>> recentTurns,
+    required CancelToken cancelToken,
+  }) async {
     calls++;
-    return const CoachResponse(spokenText: 'Welcome.',
-      nextQuestion: 'How was your day?', storyState: '',
-      difficulty: 'intermediate');
+    return const CoachResponse(
+      spokenText: 'Welcome.',
+      nextQuestion: 'How was your day?',
+      storyState: '',
+      difficulty: 'intermediate',
+    );
   }
 }
 
@@ -75,7 +88,11 @@ void main() {
     await store.setGatewayToken('test-token');
     final voice = FakeVoice();
     final gateway = FakeGateway();
-    final cubit = ConversationCubit(voice: voice, gateway: gateway, store: store);
+    final cubit = ConversationCubit(
+      voice: voice,
+      gateway: gateway,
+      store: store,
+    );
 
     expect(await cubit.start(), isTrue);
     await until(() => cubit.state.phase == SessionPhase.listening);
@@ -83,8 +100,11 @@ void main() {
     expect(await cubit.start(), isFalse);
 
     voice.pending!.complete(null);
-    await until(() => voice.spoken.length >= 2 &&
-        cubit.state.phase == SessionPhase.listening);
+    await until(
+      () =>
+          voice.spoken.length >= 2 &&
+          cubit.state.phase == SessionPhase.listening,
+    );
     expect(voice.spoken.last, contains('Take your time'));
     expect(cubit.state.phase, SessionPhase.listening);
 

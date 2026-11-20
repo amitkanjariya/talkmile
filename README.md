@@ -4,7 +4,10 @@ TalkMile is an Android-first Flutter application for spoken English practice. It
 
 ## Current implementation
 
-- Voice-guided onboarding, companion choice and preview, home, conversation, progress, and settings screens.
+- A quiet green-and-stone visual system with system, light, and dark appearances; short home copy and text-led navigation.
+- 40 everyday speaking topics, 20 interactive story starters across six genres, and 10 partner personas with age, gender, and relationship cues.
+- Ten daily vocabulary words generated once per date and difficulty, then cached by the Worker; an offline word set is available if the gateway is unreachable.
+- A learner-first coach that keeps normal turns brief, listens for longer turns, offers a short correction recap every five minutes, and revisits vocabulary weekly.
 - BLoC-owned conversation lifecycle with repeated bounded speech turns, voice commands, cancellation, gentle silence prompts, and explicit stop.
 - Runtime discovery of installed English TTS voices, preferring `en-IN` and then another installed English voice. Android does not provide a reliable voice-gender field, so partner selection uses voice-name hints and reports its actual fallback.
 - Aggregate practice counts in Drift/SQLite; short story context, learned vocabulary, corrections, and gateway token in Android-backed secure storage. Raw audio is never stored by TalkMile.

@@ -8,7 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Keeps aggregate progress in SQLite. Conversation text and gateway credentials
 /// live in Android-backed secure storage, never in the unencrypted database.
 class LocalStore extends GeneratedDatabase {
-  LocalStore([QueryExecutor? executor]) : super(executor ?? driftDatabase(name: 'talkmile'));
+  LocalStore([QueryExecutor? executor])
+    : super(executor ?? driftDatabase(name: 'talkmile'));
 
   static const _secure = FlutterSecureStorage();
   late final SharedPreferences _preferences;
@@ -39,7 +40,15 @@ class LocalStore extends GeneratedDatabase {
 
   bool get onboarded => _preferences.getBool('onboarded') ?? false;
   Future<void> setOnboarded() => _preferences.setBool('onboarded', true);
-  String get companion => _preferences.getString('companion') ?? 'female';
+  String get companion {
+    final value = _preferences.getString('companion') ?? 'mira';
+    return value == 'female'
+        ? 'mira'
+        : value == 'male'
+        ? 'arun'
+        : value;
+  }
+
   Future<void> setCompanion(String value) =>
       _preferences.setString('companion', value);
   double get speechRate => _preferences.getDouble('speechRate') ?? .48;
@@ -55,6 +64,23 @@ class LocalStore extends GeneratedDatabase {
       _preferences.getString('correctionFrequency') ?? 'gentle';
   Future<void> setCorrectionFrequency(String value) =>
       _preferences.setString('correctionFrequency', value);
+  String get themeMode => _preferences.getString('themeMode') ?? 'system';
+  Future<void> setThemeMode(String value) =>
+      _preferences.setString('themeMode', value);
+  Future<bool> claimWeeklyVocabularyReview() async {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day - now.weekday + 1);
+    final key = monday.toIso8601String().substring(0, 10);
+    final previous = _preferences.getString('lastVocabularyReviewWeek');
+    if (previous == null) {
+      await _preferences.setString('lastVocabularyReviewWeek', key);
+      return false;
+    }
+    if (previous == key) return false;
+    await _preferences.setString('lastVocabularyReviewWeek', key);
+    return true;
+  }
+
   String get gatewayUrl => _preferences.getString('gatewayUrl') ?? '';
   Future<void> setGatewayUrl(String value) =>
       _preferences.setString('gatewayUrl', value);
@@ -86,7 +112,9 @@ class LocalStore extends GeneratedDatabase {
       final corrections = data['corrections'];
       return LearningInsights(
         vocabulary: vocabulary is Map
-            ? vocabulary.map((key, value) => MapEntry('$key', value is int ? value : 0))
+            ? vocabulary.map(
+                (key, value) => MapEntry('$key', value is int ? value : 0),
+              )
             : const {},
         corrections: corrections is List
             ? corrections.whereType<String>().toList()
@@ -113,10 +141,13 @@ class LocalStore extends GeneratedDatabase {
     }
     final ranked = vocabulary.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    await _secure.write(key: 'learningInsights', value: jsonEncode({
-      'vocabulary': Map.fromEntries(ranked.take(100)),
-      'corrections': corrections.take(30).toList(),
-    }));
+    await _secure.write(
+      key: 'learningInsights',
+      value: jsonEncode({
+        'vocabulary': Map.fromEntries(ranked.take(100)),
+        'corrections': corrections.take(30).toList(),
+      }),
+    );
   }
 
   Future<void> addPractice(

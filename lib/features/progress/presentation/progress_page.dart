@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:talkmile/core/data/local_store.dart';
-import 'package:talkmile/core/theme/app_theme.dart';
 import 'package:talkmile/core/widgets/brand.dart';
 
 class ProgressPage extends StatelessWidget {
@@ -63,35 +62,59 @@ class ProgressPage extends StatelessWidget {
               progress.seconds == 0
                   ? 'Start a conversation to see real activity here.'
                   : 'Keep returning for short conversations. Your time and turns are counted from actual sessions.',
-              style: const TextStyle(color: AppColors.muted, height: 1.5),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: 18),
             const SectionLabel('Practised vocabulary'),
             const SizedBox(height: 12),
             if (insights.vocabulary.isEmpty)
-              const Text('Words introduced during your conversations will appear here.',
-                  style: TextStyle(color: AppColors.muted))
+              Text(
+                'Words introduced in conversation will appear here.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              )
             else
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final word in insights.vocabulary.keys.take(12))
-                  Chip(label: Text(word)),
-              ]),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final word in insights.vocabulary.keys.take(12))
+                    Chip(label: Text(word)),
+                ],
+              ),
             const SizedBox(height: 24),
             const SectionLabel('Grammar improvements'),
             const SizedBox(height: 12),
             if (insights.corrections.isEmpty)
-              const Text('Helpful corrections will appear after your coach notices a meaningful mistake.',
-                  style: TextStyle(color: AppColors.muted))
+              Text(
+                'Helpful corrections will appear after meaningful mistakes.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              )
             else
               for (final correction in insights.corrections.take(3))
-                Card(child: Padding(padding: const EdgeInsets.all(16),
-                  child: Text(correction))),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(correction),
+                  ),
+                ),
             if (insights.corrections.isNotEmpty) ...[
               const SizedBox(height: 24),
               const SectionLabel('Try next'),
               const SizedBox(height: 10),
-              Text('Use “${insights.corrections.first}” in your next conversation.',
-                style: const TextStyle(color: AppColors.muted, height: 1.5)),
+              Text(
+                'Use “${insights.corrections.first}” in your next conversation.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.5,
+                ),
+              ),
             ],
           ],
         );
@@ -109,7 +132,7 @@ class ProgressPage extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.brass),
+          Icon(icon, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 16),
           Expanded(child: Text(label)),
           Text(value, style: Theme.of(context).textTheme.titleLarge),

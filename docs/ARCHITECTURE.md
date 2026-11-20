@@ -2,11 +2,11 @@
 
 ## Design system
 
-Material 3 is customized with Deep Ink `#101923`, Midnight `#192633`, Warm Porcelain `#F6F4EF`, Refined Teal `#2E827C`, and Muted Brass `#D6AE76`. Dark is the default. A restrained editorial type scale and 8-point spacing guide the layouts. Controls keep clear labels and accessible sizes. The visual centerpiece is a simple waveform, with no continuous animation or glowing effects.
+Material 3 uses a warm paper, charcoal, and muted green palette, with system, light, and dark appearance choices. Copy stays concise and the home screen keeps vocabulary, topics, stories, and partner selection one tap away.
 
 ## Screens
 
-`/welcome` introduces the three-step product flow with an optional spoken guide and voice navigation. `/companion` offers two partner personas and runtime voice previews. `/` is the home dashboard with one primary start action, story continuation, and topic suggestions. `/conversation` reflects session phases and exposes an explicit Stop control. `/progress` shows actual locally recorded totals. `/settings` manages voice, pace, difficulty, corrections, privacy, and gateway setup.
+`/welcome` introduces the product with an optional spoken guide. `/companion` offers ten conversational personas and runtime voice previews. `/` links to daily vocabulary, 40 conversation topics, 20 story starters, progress, and settings. `/conversation` reflects session phases and exposes an explicit Stop control. `/progress` shows actual locally recorded totals. `/settings` manages appearance, voice, pace, difficulty, corrections, privacy, and gateway setup.
 
 ## Boundaries
 

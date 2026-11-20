@@ -17,7 +17,9 @@ This Worker keeps the Gemini API key off the phone. It is intentionally a **pers
    npx wrangler secret put GEMINI_MODEL
    ```
 
-7. Copy the Worker URL from Wrangler, append `/v1/reply`, and enter it with the access token in TalkMile Settings. Never enter the Gemini key into the app.
+7. Copy the Worker URL from Wrangler, append `/v1/reply`, and enter it with the access token in TalkMile Settings. The app uses the same base URL for `/v1/vocabulary`. Never enter the Gemini key into the app.
+
+`/v1/vocabulary` generates ten short daily words and caches the set by date and difficulty in KV. Returning to the words screen reuses the cached set; this adds at most one Gemini call per date and difficulty. If the gateway or model quota is unavailable, the app shows a bundled offline set. Conversation replies can also include the five-minute correction recap and weekly word review in the learner's normal reply request.
 
 The `TALKMILE_ACCESS_TOKEN` should be a long, random value unique to this deployment. The Worker rejects missing/incorrect tokens, oversized bodies, invalid fields, and malformed model responses. Its default quota is 100 requests per UTC day when `USAGE` is bound. KV increments are eventually consistent; this is a guardrail, not a strict public rate limiter.
 

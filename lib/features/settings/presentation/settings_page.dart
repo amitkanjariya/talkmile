@@ -48,10 +48,23 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 30),
           const SectionLabel('Conversation'),
           const SizedBox(height: 14),
-          _choice('Companion', state.companion, [
-            'female',
-            'male',
+          _choice('Speaking partner', state.companion, [
+            'mira',
+            'arun',
+            'leena',
+            'kabir',
+            'nisha',
+            'dev',
+            'sara',
+            'imran',
+            'tara',
+            'rohan',
           ], cubit.chooseCompanion),
+          _choice('Appearance', state.themeMode, [
+            'system',
+            'light',
+            'dark',
+          ], cubit.changeThemeMode),
           _choice('Difficulty', state.difficulty, [
             'beginner',
             'intermediate',
@@ -62,11 +75,12 @@ class _SettingsPageState extends State<SettingsPage> {
             'story',
             'roleplay',
           ], cubit.changeMode),
-          _choice('Corrections', state.correctionFrequency, [
-            'minimal',
-            'gentle',
-            'frequent',
-          ], cubit.changeCorrections),
+          _choice(
+            'In-turn corrections',
+            state.correctionFrequency,
+            ['minimal', 'gentle', 'frequent'],
+            cubit.changeCorrections,
+          ),
           const SizedBox(height: 14),
           Text(
             'Speaking speed: ${(state.speechRate * 100).round()}%',
@@ -81,9 +95,12 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 28),
           const SectionLabel('Private AI gateway'),
           const SizedBox(height: 12),
-          const Text(
-            'TalkMile sends recognized text to your configured gateway. Your Gemini key stays on the server.',
-            style: TextStyle(color: AppColors.muted, height: 1.5),
+          Text(
+            'TalkMile sends recognized text to your gateway. Your Gemini key stays on the server.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              height: 1.5,
+            ),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -119,7 +136,10 @@ class _SettingsPageState extends State<SettingsPage> {
             child: const Text('Save gateway'),
           ),
           if (message != null)
-            Text(message!, style: const TextStyle(color: AppColors.brass)),
+            Text(
+              message!,
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
           const SizedBox(height: 26),
           const SectionLabel('Privacy'),
           const SizedBox(height: 12),
@@ -128,22 +148,35 @@ class _SettingsPageState extends State<SettingsPage> {
             builder: (context, snapshot) {
               final status = snapshot.data;
               if (status == null) {
-                return const Text('Checking microphone and notification permissions…',
-                    style: TextStyle(color: AppColors.muted));
+                return const Text(
+                  'Checking microphone and notification permissions…',
+                  style: TextStyle(color: AppColors.muted),
+                );
               }
-              return Column(crossAxisAlignment: CrossAxisAlignment.start,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Microphone: ${status['microphone'] == true ? 'Allowed' : 'Not allowed'}'),
-                  Text('Notifications: ${status['notification'] == true ? 'Allowed' : 'Not allowed'}'),
-                  TextButton(onPressed: GetIt.I<VoiceService>().openAppSettings,
-                    child: const Text('Open Android app permissions')),
-                ]);
+                  Text(
+                    'Microphone: ${status['microphone'] == true ? 'Allowed' : 'Not allowed'}',
+                  ),
+                  Text(
+                    'Notifications: ${status['notification'] == true ? 'Allowed' : 'Not allowed'}',
+                  ),
+                  TextButton(
+                    onPressed: GetIt.I<VoiceService>().openAppSettings,
+                    child: const Text('Open Android app permissions'),
+                  ),
+                ],
+              );
             },
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Speech recognition is provided by your Android speech engine. It may send audio to its provider. TalkMile does not store raw audio.',
-            style: TextStyle(color: AppColors.muted, height: 1.5),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              height: 1.5,
+            ),
           ),
           const SizedBox(height: 15),
           OutlinedButton(
@@ -192,7 +225,7 @@ class _SettingsPageState extends State<SettingsPage> {
         labelText: label,
         border: const OutlineInputBorder(),
         filled: true,
-        fillColor: AppColors.midnight,
+        fillColor: Theme.of(context).colorScheme.surface,
       ),
       items: options
           .map(

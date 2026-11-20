@@ -3,8 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talkmile/core/audio/voice_service.dart';
-import 'package:talkmile/core/theme/app_theme.dart';
-import 'package:talkmile/core/widgets/brand.dart';
+import 'package:talkmile/features/home/domain/practice_catalog.dart';
 import 'package:talkmile/features/settings/presentation/settings_cubit.dart';
 
 class CompanionPage extends StatefulWidget {
@@ -15,129 +14,91 @@ class CompanionPage extends StatefulWidget {
 
 class _CompanionPageState extends State<CompanionPage> {
   String notice =
-      'Voice availability depends on the speech engine installed on your phone.';
+      'Voice depends on the English voices installed on your phone.';
 
-  Future<void> preview(String partner) async {
+  Future<void> preview(CoachPersona persona) async {
     try {
       final voice = GetIt.I<VoiceService>();
-      final message = await voice.preview(partner);
+      final message = await voice.preview(persona.gender);
       if (mounted) setState(() => notice = message);
     } catch (error) {
-      if (mounted) {
-        setState(() => notice = 'Voice preview is unavailable: $error');
-      }
+      if (mounted) setState(() => notice = 'Voice preview unavailable.');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final selected = context.watch<SettingsCubit>().state.companion;
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: const BrandMark(size: 27),
-        backgroundColor: Colors.transparent,
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
-              const SectionLabel('Your speaking partner'),
-              const SizedBox(height: 14),
-              Text(
-                'A voice for every mile.',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Choose the company that feels right. You can change it any time.',
-                style: TextStyle(color: AppColors.muted, height: 1.5),
-              ),
-              const SizedBox(height: 30),
-              _partner(
-                context,
-                'female',
-                'Mira',
-                'Warm and encouraging',
-                Icons.waves_rounded,
-                selected == 'female',
-              ),
-              const SizedBox(height: 14),
-              _partner(
-                context,
-                'male',
-                'Arun',
-                'Calm and patient',
-                Icons.multitrack_audio_rounded,
-                selected == 'male',
-              ),
-              const SizedBox(height: 16),
-              Text(
-                notice,
-                style: const TextStyle(color: AppColors.muted, fontSize: 12),
-              ),
-              const Spacer(),
-              FilledButton(
-                onPressed: () => context.go('/'),
-                child: const Text('Continue to TalkMile'),
-              ),
-            ],
+      appBar: AppBar(title: const Text('Speaking partners')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        children: [
+          Text(
+            'Choose someone to talk with. You can change any time.',
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
-        ),
+          const SizedBox(height: 16),
+          for (final persona in coachPersonas)
+            Card(
+              margin: const EdgeInsets.only(bottom: 9),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide(
+                  color: selected == persona.id
+                      ? colors.primary
+                      : colors.outlineVariant,
+                ),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () =>
+                    context.read<SettingsCubit>().chooseCompanion(persona.id),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 13, 8, 13),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: colors.primaryContainer,
+                        foregroundColor: colors.onPrimaryContainer,
+                        child: Text(persona.name.characters.first),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              persona.name,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            Text(
+                              '${persona.age} · ${persona.role} · ${persona.style}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Preview voice',
+                        onPressed: () => preview(persona),
+                        icon: const Icon(Icons.play_arrow_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Text(notice, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 18),
+          FilledButton(
+            onPressed: () => context.go('/'),
+            child: const Text('Done'),
+          ),
+        ],
       ),
     );
   }
-
-  Widget _partner(
-    BuildContext context,
-    String value,
-    String name,
-    String description,
-    IconData icon,
-    bool selected,
-  ) => Card(
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(20),
-      side: BorderSide(
-        color: selected ? AppColors.brass : AppColors.border,
-        width: selected ? 1.5 : 1,
-      ),
-    ),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => context.read<SettingsCubit>().chooseCompanion(value),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 27,
-              backgroundColor: AppColors.teal.withValues(alpha: .2),
-              child: Icon(icon, color: AppColors.brass),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name, style: Theme.of(context).textTheme.titleLarge),
-                  Text(
-                    description,
-                    style: const TextStyle(color: AppColors.muted),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: 'Preview $name',
-              onPressed: () => preview(value),
-              icon: const Icon(Icons.play_circle_outline_rounded),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
