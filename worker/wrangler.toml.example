@@ -6,7 +6,7 @@ compatibility_date = "2026-10-01"
 # Set GEMINI_MODEL as a Worker environment variable in deployment settings.
 # Set GEMINI_API_KEY and TALKMILE_ACCESS_TOKEN with `wrangler secret put`.
 # Never put their values in this file or the Flutter application.
-# DAILY_REQUEST_LIMIT defaults to 100.
+# DAILY_REQUEST_LIMIT defaults to 450, below a 500/day project allowance.
 
 [[kv_namespaces]]
 binding = "USAGE"

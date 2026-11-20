@@ -24,7 +24,7 @@ The progress page reports measured session time, speaking turns, practice days, 
 
 ## Costs
 
-The Worker and Gemini model are deliberately configurable. Free allowances, model names, and quotas can change. Check the current [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing), [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits), and [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/) before deployment. The Worker defaults to at most 100 requests per UTC day when KV is configured. No paid service is enabled by this repository.
+The Worker and Gemini model are deliberately configurable. Free allowances, model names, and quotas can change. Check the current [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing), [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits), and [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/) before deployment. The Worker defaults to at most 450 requests per UTC day when KV is configured, leaving a buffer below the 500 daily requests in the current project allowance. No paid service is enabled by this repository.
 
 ## Threats to address before release
 

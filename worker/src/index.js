@@ -100,7 +100,7 @@ async function dailyVocabulary(body, env) {
     const day = new Date().toISOString().slice(0, 10);
     const key = `requests:${day}`;
     const count = Number(await env.USAGE.get(key) || 0);
-    const cap = Math.max(1, Number(env.DAILY_REQUEST_LIMIT || 100));
+    const cap = Math.max(1, Number(env.DAILY_REQUEST_LIMIT || 450));
     if (count >= cap) return json({error: 'Daily quota reached'}, 429);
     await env.USAGE.put(key, String(count + 1), {expirationTtl: 172800});
   }
@@ -169,7 +169,7 @@ export default {
       const day = new Date().toISOString().slice(0, 10);
       const key = `requests:${day}`;
       const count = Number(await env.USAGE.get(key) || 0);
-      const cap = Math.max(1, Number(env.DAILY_REQUEST_LIMIT || 100));
+      const cap = Math.max(1, Number(env.DAILY_REQUEST_LIMIT || 450));
       if (count >= cap) return json({error: 'Daily quota reached'}, 429);
       await env.USAGE.put(key, String(count + 1), {expirationTtl: 172800});
     }
