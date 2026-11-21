@@ -10,7 +10,7 @@ class SettingsState {
     this.mode = 'conversation',
     this.correctionFrequency = 'gentle',
     this.themeMode = 'system',
-    this.gatewayConfigured = false,
+    this.geminiKeyConfigured = false,
   });
   final bool ready;
   final String companion;
@@ -19,7 +19,7 @@ class SettingsState {
   final String mode;
   final String correctionFrequency;
   final String themeMode;
-  final bool gatewayConfigured;
+  final bool geminiKeyConfigured;
 }
 
 class SettingsCubit extends Cubit<SettingsState> {
@@ -35,7 +35,7 @@ class SettingsCubit extends Cubit<SettingsState> {
       mode: store.mode,
       correctionFrequency: store.correctionFrequency,
       themeMode: store.themeMode,
-      gatewayConfigured: (await store.getGatewayToken()).isNotEmpty,
+      geminiKeyConfigured: (await store.getGeminiApiKey()).isNotEmpty,
     ),
   );
 
@@ -69,11 +69,15 @@ class SettingsCubit extends Cubit<SettingsState> {
     await load();
   }
 
-  Future<void> configureGateway(String token) async {
-    if (token.trim().isEmpty) {
-      throw const FormatException('Enter the gateway access token.');
+  Future<void> configureGeminiKey(String apiKey) async {
+    final key = apiKey.trim();
+    if (key.isEmpty) {
+      throw const FormatException('Enter your Gemini API key.');
     }
-    await store.setGatewayToken(token.trim());
+    if (key.length > 256 || key.contains(RegExp(r'\s'))) {
+      throw const FormatException('That Gemini API key does not look valid.');
+    }
+    await store.setGeminiApiKey(key);
     await load();
   }
 }

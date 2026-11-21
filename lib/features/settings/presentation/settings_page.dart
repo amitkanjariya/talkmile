@@ -14,12 +14,12 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final token = TextEditingController();
+  final apiKey = TextEditingController();
   String? message;
 
   @override
   void dispose() {
-    token.dispose();
+    apiKey.dispose();
     super.dispose();
   }
 
@@ -84,10 +84,10 @@ class _SettingsPageState extends State<SettingsPage> {
             onChanged: cubit.changeRate,
           ),
           const SizedBox(height: 28),
-          const SectionLabel('Private AI gateway'),
+          const SectionLabel('Your Gemini API key'),
           const SizedBox(height: 12),
           Text(
-            'TalkMile uses its fixed private gateway. Your access token is stored securely; the Gemini key stays on the server.',
+            'TalkMile stores your key securely on this device and forwards it to Gemini through its gateway. Google free-tier quotas apply; paid usage may be billed to your Google project.',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               height: 1.5,
@@ -95,12 +95,12 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 16),
           TextField(
-            controller: token,
+            controller: apiKey,
             obscureText: true,
             decoration: InputDecoration(
-              labelText: state.gatewayConfigured
-                  ? 'Replace gateway access token'
-                  : 'Gateway access token',
+              labelText: state.geminiKeyConfigured
+                  ? 'Replace Gemini API key'
+                  : 'Gemini API key',
               border: const OutlineInputBorder(),
             ),
           ),
@@ -108,14 +108,14 @@ class _SettingsPageState extends State<SettingsPage> {
           OutlinedButton(
             onPressed: () async {
               try {
-                await cubit.configureGateway(token.text);
-                token.clear();
-                setState(() => message = 'Access token saved securely.');
+                await cubit.configureGeminiKey(apiKey.text);
+                apiKey.clear();
+                setState(() => message = 'Gemini API key saved on this device.');
               } catch (error) {
                 setState(() => message = error.toString());
               }
             },
-            child: const Text('Save access token'),
+            child: const Text('Save Gemini API key'),
           ),
           if (message != null)
             Text(

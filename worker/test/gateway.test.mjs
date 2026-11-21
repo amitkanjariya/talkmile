@@ -13,6 +13,14 @@ function request(body, token = 'private-token', path = '/v1/reply') {
   });
 }
 
+function requestWithGeminiKey(body, apiKey, path = '/v1/reply') {
+  return new Request(`https://talkmile.example${path}`, {
+    method: 'POST',
+    headers: {'x-gemini-api-key': apiKey, 'content-type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+}
+
 const validBody = {
   utterance: 'Start a friendly conversation.',
   mode: 'conversation',
@@ -49,6 +57,54 @@ test('accepts a friend token while retaining the original token', async () => {
   assert.equal(ownerResponse.status, 200);
   assert.equal(friendResponse.status, 200);
   assert.equal(unknownResponse.status, 401);
+});
+
+test('uses each caller Gemini key without using or storing the Worker key', async () => {
+  let sentKey;
+  globalThis.fetch = async (_url, options) => {
+    sentKey = options.headers['x-goog-api-key'];
+    return Response.json({candidates: [{content: {parts: [{text: JSON.stringify({
+      spokenText: 'Good to hear from you.', nextQuestion: 'What did you enjoy most?',
+      corrections: [], storyState: '', chapterCompleted: false,
+      newVocabulary: [], difficulty: 'intermediate',
+    })}]}}]});
+  };
+
+  const response = await gateway.fetch(
+    requestWithGeminiKey(validBody, 'friend-gemini-key'), env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(sentKey, 'friend-gemini-key');
+  assert.notEqual(sentKey, env.GEMINI_API_KEY);
+});
+
+test('applies the daily Worker cap per Gemini key, not across users', async () => {
+  const values = new Map();
+  const usage = {
+    async get(key) { return values.get(key) ?? null; },
+    async put(key, value) { values.set(key, value); },
+  };
+  globalThis.fetch = async () => Response.json({candidates: [{content: {parts: [{text: JSON.stringify({
+    spokenText: 'I understand.', nextQuestion: 'What would help now?',
+    corrections: [], storyState: '', chapterCompleted: false,
+    newVocabulary: [], difficulty: 'intermediate',
+  })}]}}]});
+  const limitedEnv = {...env, USAGE: usage, DAILY_REQUEST_LIMIT: '1'};
+
+  const first = await gateway.fetch(
+    requestWithGeminiKey(validBody, 'user-one-key'), limitedEnv,
+  );
+  const firstAgain = await gateway.fetch(
+    requestWithGeminiKey(validBody, 'user-one-key'), limitedEnv,
+  );
+  const secondUser = await gateway.fetch(
+    requestWithGeminiKey(validBody, 'user-two-key'), limitedEnv,
+  );
+
+  assert.equal(first.status, 200);
+  assert.equal(firstAgain.status, 429);
+  assert.equal(secondUser.status, 200);
 });
 
 test('rejects oversized or malformed payloads', async () => {

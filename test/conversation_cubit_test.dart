@@ -101,7 +101,7 @@ void main() {
       FlutterSecureStorage.setMockInitialValues({});
       final store = LocalStore(NativeDatabase.memory());
       await store.open();
-      await store.setGatewayToken('test-token');
+      await store.setGeminiApiKey('test-api-key');
       final voice = FakeVoice();
       final gateway = FakeGateway();
       final cubit = ConversationCubit(
@@ -134,7 +134,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     final store = LocalStore(NativeDatabase.memory());
     await store.open();
-    await store.setGatewayToken('test-token');
+    await store.setGeminiApiKey('test-api-key');
     final voice = FakeVoice();
     final gateway = FakeGateway()..failuresRemaining = 1;
     final cubit = ConversationCubit(
@@ -162,7 +162,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     final store = LocalStore(NativeDatabase.memory());
     await store.open();
-    await store.setGatewayToken('test-token');
+    await store.setGeminiApiKey('test-api-key');
     final voice = FakeVoice();
     final gateway = FakeGateway()
       ..replies.addAll([

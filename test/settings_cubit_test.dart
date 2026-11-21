@@ -9,7 +9,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'settings uses the fixed gateway and saves only the access token',
+    'settings uses the fixed gateway and saves a Gemini key securely',
     () async {
       SharedPreferences.setMockInitialValues({
         'gatewayUrl': 'https://old.example',
@@ -20,12 +20,12 @@ void main() {
       final cubit = SettingsCubit(store);
 
       await cubit.load();
-      expect(cubit.state.gatewayConfigured, isFalse);
+      expect(cubit.state.geminiKeyConfigured, isFalse);
       expect(store.gatewayUrl, LocalStore.fixedGatewayUrl);
 
-      await cubit.configureGateway('  private-token  ');
-      expect(await store.getGatewayToken(), 'private-token');
-      expect(cubit.state.gatewayConfigured, isTrue);
+      await cubit.configureGeminiKey('  private-api-key  ');
+      expect(await store.getGeminiApiKey(), 'private-api-key');
+      expect(cubit.state.geminiKeyConfigured, isTrue);
       expect(store.gatewayUrl, LocalStore.fixedGatewayUrl);
 
       await cubit.close();

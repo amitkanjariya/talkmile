@@ -2,11 +2,13 @@ name = "talkmile-gateway"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
 
-# Choose a currently eligible model from the official Gemini pricing page.
-# Set GEMINI_MODEL as a Worker environment variable in deployment settings.
-# Set GEMINI_API_KEY and TALKMILE_ACCESS_TOKEN with `wrangler secret put`.
-# Never put their values in this file or the Flutter application.
-# DAILY_REQUEST_LIMIT defaults to 450, below a 500/day project allowance.
+# Choose a model currently supported by your Gemini API project and set
+# GEMINI_MODEL as a Worker environment variable.
+# New app versions pass each user's Gemini key per request. GEMINI_API_KEY and
+# TALKMILE_ACCESS_TOKEN remain optional for older app versions. Never put secret
+# values in this file or the Flutter application.
+# DAILY_REQUEST_LIMIT defaults to 450 per Gemini key; the global daily cap
+# defaults to 45000. Both KV limits are best-effort, not strict atomic limits.
 
 [[kv_namespaces]]
 binding = "USAGE"

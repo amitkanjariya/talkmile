@@ -146,7 +146,7 @@ const vocabularySchema = {
   required: ['words'],
 };
 
-async function dailyVocabulary(body, env) {
+async function dailyVocabulary(body, env, geminiApiKey) {
   if (!body || !/^\d{4}-\d{2}-\d{2}$/.test(body.date) ||
       !['beginner', 'intermediate', 'advanced'].includes(body.difficulty)) {
     return json({error: 'Invalid request'}, 400);
@@ -156,20 +156,13 @@ async function dailyVocabulary(body, env) {
     const cached = await env.USAGE.get(cacheKey);
     if (cached) return json(JSON.parse(cached));
   }
-  if (!env.GEMINI_API_KEY || !env.GEMINI_MODEL) return json({error: 'Gateway not configured'}, 503);
-  if (env.USAGE) {
-    const day = new Date().toISOString().slice(0, 10);
-    const key = `requests:${day}`;
-    const count = Number(await env.USAGE.get(key) || 0);
-    const cap = Math.max(1, Number(env.DAILY_REQUEST_LIMIT || 450));
-    if (count >= cap) return json({error: 'Daily quota reached'}, 429);
-    await env.USAGE.put(key, String(count + 1), {expirationTtl: 172800});
-  }
+  if (!geminiApiKey || !env.GEMINI_MODEL) return json({error: 'Gemini API key or model is unavailable'}, 503);
+  if (!await consumeDailyQuota(geminiApiKey, env)) return json({error: 'TalkMile daily request limit reached for this key'}, 429);
   const model = encodeURIComponent(env.GEMINI_MODEL);
   try {
     const upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: 'POST',
-      headers: {'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY},
+      headers: {'content-type': 'application/json', 'x-goog-api-key': geminiApiKey},
       body: JSON.stringify({
         systemInstruction: {parts: [{text: 'Create exactly ten useful, slightly challenging English words and expressions for adult everyday spoken conversation. Target CEFR B1-B2: clearly more useful and nuanced than basic A1-A2 words, while still common in real life. Prefer practical phrasal verbs, collocations, and precise everyday adjectives or verbs (for example: sort out, overwhelmed, postpone, reassure, worthwhile). Avoid academic, rare, or formal words. Include a short plain-English meaning and a natural spoken example for each. Choose distinct items and avoid words likely to repeat on adjacent dates. For beginner level, choose accessible B1 stretch vocabulary rather than basic words.'}]},
         contents: [{role: 'user', parts: [{text: `Create the daily set for ${body.date}. Learner setting: ${body.difficulty}, but keep the words useful B1-B2 stretch vocabulary. Return exactly ten distinct items.`}]}],
@@ -177,6 +170,7 @@ async function dailyVocabulary(body, env) {
       }),
     });
     if (upstream.status === 429) return json({error: 'AI quota reached'}, 429);
+    if (upstream.status === 401 || upstream.status === 403) return json({error: 'Gemini API key was rejected'}, 401);
     if (!upstream.ok) return json({error: 'AI service unavailable'}, 502);
     const raw = (await upstream.json())?.candidates?.[0]?.content?.parts?.[0]?.text;
     const result = JSON.parse(raw);
@@ -215,12 +209,33 @@ async function hasValidAccessToken(request, env) {
   return accepted;
 }
 
+async function consumeDailyQuota(geminiApiKey, env) {
+  if (!env.USAGE) return true;
+  const day = new Date().toISOString().slice(0, 10);
+  const keyHash = await hash(geminiApiKey);
+  const userUsageKey = `requests:${day}:${keyHash}`;
+  const globalUsageKey = `requests:${day}:all-users`;
+  const userCount = Number(await env.USAGE.get(userUsageKey) || 0);
+  const globalCount = Number(await env.USAGE.get(globalUsageKey) || 0);
+  const userCap = Math.max(1, Number(env.DAILY_REQUEST_LIMIT || 450));
+  const globalCap = Math.max(1, Number(env.GLOBAL_DAILY_REQUEST_LIMIT || 45000));
+  if (userCount >= userCap || globalCount >= globalCap) return false;
+  await Promise.all([
+    env.USAGE.put(userUsageKey, String(userCount + 1), {expirationTtl: 172800}),
+    env.USAGE.put(globalUsageKey, String(globalCount + 1), {expirationTtl: 172800}),
+  ]);
+  return true;
+}
+
 export default {
   async fetch(request, env) {
     if (request.method !== 'POST') return json({error: 'Method not allowed'}, 405);
     const path = new URL(request.url).pathname;
     if (!['/v1/reply', '/v1/vocabulary'].includes(path)) return json({error: 'Not found'}, 404);
-    if (!await hasValidAccessToken(request, env)) {
+    const suppliedGeminiKey = (request.headers.get('x-gemini-api-key') || '').trim();
+    const legacyAuthorized = !suppliedGeminiKey && await hasValidAccessToken(request, env);
+    const geminiApiKey = suppliedGeminiKey || (legacyAuthorized ? env.GEMINI_API_KEY : '');
+    if (!geminiApiKey) {
       return json({error: 'Unauthorized'}, 401);
     }
   if (Number(request.headers.get('content-length') || 0) > 20000) {
@@ -234,22 +249,15 @@ export default {
     } catch (_) {
       return json({error: 'Invalid JSON'}, 400);
     }
-    if (path === '/v1/vocabulary') return dailyVocabulary(body, env);
+    if (path === '/v1/vocabulary') return dailyVocabulary(body, env, geminiApiKey);
     if (!validate(body)) return json({error: 'Invalid request'}, 400);
-    if (!env.GEMINI_API_KEY || !env.GEMINI_MODEL) {
+    if (!env.GEMINI_MODEL) {
       return json({error: 'Gateway not configured'}, 503);
     }
 
-    // KV is eventually consistent. This is a personal-MVP quota guard, not a
-    // production-grade atomic limiter. Public release needs durable auth + limiter.
-    if (env.USAGE) {
-      const day = new Date().toISOString().slice(0, 10);
-      const key = `requests:${day}`;
-      const count = Number(await env.USAGE.get(key) || 0);
-      const cap = Math.max(1, Number(env.DAILY_REQUEST_LIMIT || 450));
-      if (count >= cap) return json({error: 'Daily quota reached'}, 429);
-      await env.USAGE.put(key, String(count + 1), {expirationTtl: 172800});
-    }
+    // KV is eventually consistent, so the per-key and global limits are
+    // best-effort guardrails rather than strict atomic rate limits.
+    if (!await consumeDailyQuota(geminiApiKey, env)) return json({error: 'TalkMile daily request limit reached for this key'}, 429);
 
     const prompt = JSON.stringify({
       promptVersion: PROMPT_VERSION,
@@ -272,7 +280,7 @@ export default {
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: 'POST', signal: controller.signal,
-          headers: {'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY},
+          headers: {'content-type': 'application/json', 'x-goog-api-key': geminiApiKey},
           body: JSON.stringify({
             systemInstruction: {parts: [{text: SYSTEM_PROMPT}]},
             contents: [{role: 'user', parts: [{text: prompt}]}],
@@ -284,6 +292,7 @@ export default {
         },
       );
       if (upstream.status === 429) return json({error: 'AI quota reached'}, 429);
+      if (upstream.status === 401 || upstream.status === 403) return json({error: 'Gemini API key was rejected'}, 401);
       if (!upstream.ok) return json({error: 'AI service unavailable'}, 502);
       const result = await upstream.json();
       const raw = result?.candidates?.[0]?.content?.parts?.[0]?.text;

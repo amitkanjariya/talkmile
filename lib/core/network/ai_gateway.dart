@@ -36,9 +36,9 @@ class AiGateway implements AiGatewayPort {
 
   Future<List<DailyWord>> dailyWords(LocalStore store) async {
     final url = store.gatewayUrl;
-    final token = await store.getGatewayToken();
-    if (url.isEmpty || token.isEmpty) {
-      throw StateError('Gateway is not configured.');
+    final apiKey = await store.getGeminiApiKey();
+    if (url.isEmpty || apiKey.isEmpty) {
+      throw StateError('Add your Gemini API key in Settings.');
     }
     final now = DateTime.now();
     final date =
@@ -51,7 +51,7 @@ class AiGateway implements AiGatewayPort {
     final response = await _dio.post<Map<String, dynamic>>(
       vocabularyUri.toString(),
       data: {'date': date, 'difficulty': store.difficulty},
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
+      options: Options(headers: {'X-Gemini-API-Key': apiKey}),
     );
     final words = response.data?['words'];
     if (words is! List || words.length != 10) {
@@ -85,10 +85,10 @@ class AiGateway implements AiGatewayPort {
     required CancelToken cancelToken,
   }) async {
     final url = store.gatewayUrl;
-    final token = await store.getGatewayToken();
-    if (url.isEmpty || token.isEmpty) {
+    final apiKey = await store.getGeminiApiKey();
+    if (url.isEmpty || apiKey.isEmpty) {
       throw StateError(
-        'Configure your private Gemini gateway in Settings before starting.',
+        'Add your Gemini API key in Settings before starting.',
       );
     }
     for (var attempt = 0; attempt < 3; attempt++) {
@@ -107,7 +107,7 @@ class AiGateway implements AiGatewayPort {
             'reviewWords': reviewWords.take(10).toList(),
             'recentTurns': recentTurns.take(8).toList(),
           },
-          options: Options(headers: {'Authorization': 'Bearer $token'}),
+          options: Options(headers: {'X-Gemini-API-Key': apiKey}),
           cancelToken: cancelToken,
         );
         return CoachResponse.fromJson(response.data);
@@ -115,7 +115,7 @@ class AiGateway implements AiGatewayPort {
         if (CancelToken.isCancel(error)) rethrow;
         final code = error.response?.statusCode;
         if (code == 401) {
-          throw StateError('Gateway access was rejected. Check Settings.');
+          throw StateError('Gemini API key was rejected. Check your key in Settings.');
         }
         if (code == 429) {
           throw StateError(

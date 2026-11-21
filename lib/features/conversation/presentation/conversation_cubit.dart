@@ -44,11 +44,11 @@ class ConversationCubit extends Cubit<ConversationState> {
 
   Future<bool> start({String? topic}) async {
     if (active) return false;
-    if (store.gatewayUrl.isEmpty || (await store.getGatewayToken()).isEmpty) {
+    if (store.gatewayUrl.isEmpty || (await store.getGeminiApiKey()).isEmpty) {
       emit(
         state.copyWith(
           phase: SessionPhase.error,
-          status: 'Set up your private AI gateway in Settings first.',
+          status: 'Add your Gemini API key in Settings to start.',
         ),
       );
       return false;

@@ -144,10 +144,10 @@ class LocalStore extends GeneratedDatabase {
   }
 
   String get gatewayUrl => fixedGatewayUrl;
-  Future<String> getGatewayToken() async =>
-      await _secure.read(key: 'gatewayToken') ?? '';
-  Future<void> setGatewayToken(String value) =>
-      _secure.write(key: 'gatewayToken', value: value);
+  Future<String> getGeminiApiKey() async =>
+      await _secure.read(key: 'geminiApiKey') ?? '';
+  Future<void> setGeminiApiKey(String value) =>
+      _secure.write(key: 'geminiApiKey', value: value);
 
   Future<Map<String, dynamic>?> readStory() async {
     final raw = await _secure.read(key: 'storyState');
