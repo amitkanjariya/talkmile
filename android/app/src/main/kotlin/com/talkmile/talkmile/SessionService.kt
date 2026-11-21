@@ -9,11 +9,13 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 
 /** Visible session lifetime. SpeechRecognizer itself is owned by the Flutter
  * speech adapter; therefore locked-screen recognition remains device-dependent.
  */
 class SessionService : Service() {
+    private var sessionWakeLock: PowerManager.WakeLock? = null
     companion object {
         const val ACTION_START = "com.talkmile.talkmile.START"
         const val ACTION_STOP = "com.talkmile.talkmile.STOP"
@@ -33,6 +35,7 @@ class SessionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             MainActivity.notifyNotificationStop()
+            releaseSessionWakeLock()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
@@ -53,11 +56,36 @@ class SessionService : Service() {
                 android.R.drawable.ic_media_pause, "Stop", stopAction).build())
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val foregroundTypes = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             startForeground(NOTIFICATION_ID, notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                foregroundTypes)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        acquireSessionWakeLock()
         return START_NOT_STICKY
+    }
+
+    private fun acquireSessionWakeLock() {
+        if (sessionWakeLock?.isHeld == true) return
+        val powerManager = getSystemService(PowerManager::class.java)
+        sessionWakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "$packageName:TalkMileSession",
+        ).apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseSessionWakeLock() {
+        sessionWakeLock?.let { if (it.isHeld) it.release() }
+        sessionWakeLock = null
+    }
+
+    override fun onDestroy() {
+        releaseSessionWakeLock()
+        super.onDestroy()
     }
 }

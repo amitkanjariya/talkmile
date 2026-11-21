@@ -36,6 +36,9 @@ class FakeVoice implements VoicePort {
   }
 
   @override
+  Future<void> recover() async {}
+
+  @override
   Future<void> stop() async {
     stops++;
     if (pending != null && !pending!.isCompleted) pending!.complete(null);
@@ -44,6 +47,7 @@ class FakeVoice implements VoicePort {
 
 class FakeGateway implements AiGatewayPort {
   int calls = 0;
+  int failuresRemaining = 0;
   @override
   Future<CoachResponse> reply({
     required LocalStore store,
@@ -60,6 +64,10 @@ class FakeGateway implements AiGatewayPort {
     required CancelToken cancelToken,
   }) async {
     calls++;
+    if (failuresRemaining > 0) {
+      failuresRemaining--;
+      throw StateError('Temporary connection failure');
+    }
     return const CoachResponse(
       spokenText: 'Welcome.',
       nextQuestion: 'How was your day?',
@@ -69,9 +77,9 @@ class FakeGateway implements AiGatewayPort {
   }
 }
 
-Future<void> until(bool Function() condition) async {
-  for (var i = 0; i < 100 && !condition(); i++) {
-    await Future<void>.delayed(const Duration(milliseconds: 5));
+Future<void> until(bool Function() condition, {int attempts = 100}) async {
+  for (var i = 0; i < attempts && !condition(); i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
   }
   expect(condition(), isTrue);
 }
@@ -111,6 +119,35 @@ void main() {
     await Future.wait([cubit.stop(), cubit.stop()]);
     expect(cubit.state.phase, SessionPhase.stopped);
     expect(voice.stops, 1);
+    await cubit.close();
+    await store.close();
+  });
+
+  test('keeps a session alive through a temporary gateway failure', () async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    final store = LocalStore(NativeDatabase.memory());
+    await store.open();
+    await store.setGatewayUrl('https://example.com/v1/reply');
+    await store.setGatewayToken('test-token');
+    final voice = FakeVoice();
+    final gateway = FakeGateway()..failuresRemaining = 1;
+    final cubit = ConversationCubit(
+      voice: voice,
+      gateway: gateway,
+      store: store,
+    );
+
+    expect(await cubit.start(), isTrue);
+    await until(
+      () => cubit.state.phase == SessionPhase.listening,
+      attempts: 600,
+    );
+    expect(gateway.calls, 2);
+    expect(cubit.state.phase, isNot(SessionPhase.error));
+
+    await cubit.stop();
+    expect(cubit.state.phase, SessionPhase.stopped);
     await cubit.close();
     await store.close();
   });

@@ -89,17 +89,26 @@ class ConversationCubit extends Cubit<ConversationState> {
     }
   }
 
-  Future<void> _run(int generation, {String? topic}) async {
+  Future<void> _run(
+    int generation, {
+    String? topic,
+    String? resumeUtterance,
+  }) async {
+    var utterance = resumeUtterance ?? '';
     try {
-      final saved = await store.readStory();
-      _storyState = topic == 'Continue previous story'
-          ? (saved?['storyState'] as String? ?? '')
-          : '';
-      var utterance = topic == null
-          ? 'Start a friendly speaking practice. Introduce an interesting everyday topic.'
-          : topic == 'Continue previous story' && _storyState.isNotEmpty
-          ? 'Continue the saved interactive story and ask what I do next.'
-          : 'Start a speaking practice about $topic.';
+      if (resumeUtterance == null) {
+        final saved = await store.readStory();
+        _storyState = topic == 'Continue previous story'
+            ? (saved?['storyState'] as String? ?? '')
+            : '';
+      }
+      utterance =
+          resumeUtterance ??
+          (topic == null
+              ? 'Start a friendly speaking practice. Introduce an interesting everyday topic.'
+              : topic == 'Continue previous story' && _storyState.isNotEmpty
+              ? 'Continue the saved interactive story and ask what I do next.'
+              : 'Start a speaking practice about $topic.');
       var silentTurns = 0;
       while (generation == _generation && !isClosed) {
         emit(
@@ -108,7 +117,6 @@ class ConversationCubit extends Cubit<ConversationState> {
             status: 'Thinking about your answer',
           ),
         );
-        _request = CancelToken();
         final correctionReview =
             _nextCorrectionReview != null &&
             !DateTime.now().isBefore(_nextCorrectionReview!);
@@ -121,26 +129,52 @@ class ConversationCubit extends Cubit<ConversationState> {
         final reviewWords = _weeklyVocabularyReview
             ? await store.weeklyVocabularyWords()
             : const <String>[];
-        final reply = await gateway.reply(
-          store: store,
-          utterance: utterance,
-          mode:
-              topic == 'Continue previous story' ||
-                  topic?.startsWith('Story:') == true
-              ? 'story'
-              : store.mode,
-          difficulty: store.difficulty,
-          corrections: store.correctionFrequency,
-          storyState: _storyState,
-          persona:
-              '${persona.name}, age ${persona.age}, ${persona.gender}, your ${persona.role}; ${persona.style}.',
-          correctionReview: correctionReview,
-          reviewWords: reviewWords,
-          recentTurns: _recent,
-          cancelToken: _request!,
-        );
-        _request = null;
-        if (generation != _generation) break;
+        CoachResponse? reply;
+        var retries = 0;
+        while (reply == null && generation == _generation && !isClosed) {
+          _request = CancelToken();
+          try {
+            reply = await gateway.reply(
+              store: store,
+              utterance: utterance,
+              mode:
+                  topic == 'Continue previous story' ||
+                      topic?.startsWith('Story:') == true
+                  ? 'story'
+                  : store.mode,
+              difficulty: store.difficulty,
+              corrections: store.correctionFrequency,
+              storyState: _storyState,
+              persona:
+                  '${persona.name}, age ${persona.age}, ${persona.gender}, your ${persona.role}; ${persona.style}.',
+              correctionReview: correctionReview,
+              reviewWords: reviewWords,
+              recentTurns: _recent,
+              cancelToken: _request!,
+            );
+          } on DioException catch (error) {
+            if (CancelToken.isCancel(error) || generation != _generation) {
+              rethrow;
+            }
+            retries++;
+            await _waitToRetry(
+              generation,
+              retries,
+              isQuota: error.response?.statusCode == 429,
+            );
+          } catch (error) {
+            if (generation != _generation) break;
+            retries++;
+            await _waitToRetry(
+              generation,
+              retries,
+              isQuota: error.toString().toLowerCase().contains('quota'),
+            );
+          } finally {
+            _request = null;
+          }
+        }
+        if (reply == null || generation != _generation) break;
         if (_weeklyVocabularyReview) {
           await store.markWeeklyVocabularyReview();
           _weeklyVocabularyReview = false;
@@ -162,7 +196,7 @@ class ConversationCubit extends Cubit<ConversationState> {
             spokenText: _lastSpeech,
           ),
         );
-        await voice.speak(_lastSpeech, rate: store.speechRate);
+        await _speakUntilAvailable(_lastSpeech);
         if (generation != _generation) break;
         while (generation == _generation) {
           emit(
@@ -171,7 +205,23 @@ class ConversationCubit extends Cubit<ConversationState> {
               status: 'Listening to you',
             ),
           );
-          final heard = await voice.listen();
+          String? heard;
+          try {
+            heard = await voice.listen();
+          } catch (_) {
+            if (generation != _generation) break;
+            emit(
+              state.copyWith(
+                phase: SessionPhase.recovering,
+                status: 'Reconnecting to the microphone',
+              ),
+            );
+            try {
+              await voice.recover();
+            } catch (_) {}
+            await Future<void>.delayed(const Duration(seconds: 2));
+            continue;
+          }
           if (generation != _generation) break;
           if (heard == null || heard.isEmpty) {
             silentTurns++;
@@ -185,7 +235,7 @@ class ConversationCubit extends Cubit<ConversationState> {
                 spokenText: prompt,
               ),
             );
-            await voice.speak(prompt, rate: store.speechRate);
+            await _speakUntilAvailable(prompt);
             continue;
           }
           silentTurns = 0;
@@ -204,23 +254,88 @@ class ConversationCubit extends Cubit<ConversationState> {
       }
     } on DioException catch (error) {
       if (!CancelToken.isCancel(error) && generation == _generation) {
-        await _pauseForError(
-          'The AI connection stopped. Open the app to retry.',
+        await _resumeAfterFailure(generation, topic, utterance);
+      }
+    } catch (_) {
+      if (generation == _generation) {
+        await _resumeAfterFailure(generation, topic, utterance);
+      }
+    }
+  }
+
+  Future<void> _resumeAfterFailure(
+    int generation,
+    String? topic,
+    String utterance,
+  ) async {
+    emit(
+      state.copyWith(
+        phase: SessionPhase.recovering,
+        status:
+            'Recovering the conversation. It will stay active until you end it.',
+      ),
+    );
+    try {
+      await voice.recover();
+    } catch (_) {}
+    await Future<void>.delayed(const Duration(seconds: 3));
+    if (generation == _generation && !isClosed) {
+      unawaited(_run(generation, topic: topic, resumeUtterance: utterance));
+    }
+  }
+
+  Future<void> _waitToRetry(
+    int generation,
+    int failures, {
+    bool isQuota = false,
+  }) async {
+    final delay = isQuota
+        ? const Duration(minutes: 1)
+        : Duration(seconds: [2, 4, 8, 16, 30][(failures - 1).clamp(0, 4)]);
+    emit(
+      state.copyWith(
+        phase: SessionPhase.temporarilyPaused,
+        status: isQuota
+            ? 'AI is busy. Staying ready and trying again shortly.'
+            : 'Connection interrupted. Retrying in ${delay.inSeconds}s.',
+      ),
+    );
+    await Future<void>.delayed(delay);
+    if (generation != _generation || isClosed) return;
+  }
+
+  Future<void> _speakUntilAvailable(String text) async {
+    var failures = 0;
+    while (active && !isClosed) {
+      try {
+        await voice.speak(text, rate: store.speechRate);
+        return;
+      } catch (_) {
+        failures++;
+        emit(
+          state.copyWith(
+            phase: SessionPhase.recovering,
+            status: 'Reconnecting to your speaking partner',
+          ),
+        );
+        try {
+          await voice.recover();
+        } catch (_) {}
+        await Future<void>.delayed(
+          Duration(seconds: [2, 4, 8, 16, 30][(failures - 1).clamp(0, 4)]),
         );
       }
-    } catch (error) {
-      if (generation == _generation) await _pauseForError(_message(error));
     }
   }
 
   Future<String> _handleCommand(VoiceCommand command) async {
     switch (command) {
       case VoiceCommand.repeat:
-        await voice.speak(_lastSpeech, rate: store.speechRate);
+        await _speakUntilAvailable(_lastSpeech);
         return '';
       case VoiceCommand.slower:
         await store.setSpeechRate((store.speechRate - .08).clamp(.3, .55));
-        await voice.speak('I will speak more slowly.', rate: store.speechRate);
+        await _speakUntilAvailable('I will speak more slowly.');
         return '';
       case VoiceCommand.male:
       case VoiceCommand.female:
@@ -228,7 +343,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         await store.setCompanion(partner);
         final notice = await voice.selectVoice(partner);
         emit(state.copyWith(voiceNotice: notice));
-        await voice.speak('Voice preference updated.', rate: store.speechRate);
+        await _speakUntilAvailable('Voice preference updated.');
         return '';
       case VoiceCommand.harder:
         await store.setDifficulty('advanced');
@@ -237,11 +352,10 @@ class ConversationCubit extends Cubit<ConversationState> {
         await store.setDifficulty('beginner');
         return 'Please make the next question easier.';
       case VoiceCommand.mistake:
-        await voice.speak(
+        await _speakUntilAvailable(
           _lastCorrection.isEmpty
               ? 'I have not noticed a significant correction yet.'
               : 'You could say: $_lastCorrection',
-          rate: store.speechRate,
         );
         return '';
       case VoiceCommand.hint:
@@ -260,20 +374,6 @@ class ConversationCubit extends Cubit<ConversationState> {
   void _remember(String user, String assistant) {
     _recent.add({'user': user, 'assistant': assistant});
     if (_recent.length > 8) _recent.removeAt(0);
-  }
-
-  Future<void> _pauseForError(String message) async {
-    _timer?.cancel();
-    await voice.stop();
-    if (_startedAt != null) {
-      await store.addPractice(
-        DateTime.now().difference(_startedAt!),
-        state.turns,
-        chapters: _chapters,
-      );
-      _startedAt = null;
-    }
-    emit(state.copyWith(phase: SessionPhase.error, status: message));
   }
 
   Future<void> stop() {

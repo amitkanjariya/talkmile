@@ -36,7 +36,7 @@ class _CompanionPageState extends State<CompanionPage> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
           Text(
-            'Choose someone to talk with. You can change any time.',
+            'Fictional adult partners: friends, spouses, and colleagues.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),

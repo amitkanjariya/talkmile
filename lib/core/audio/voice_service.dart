@@ -50,6 +50,7 @@ abstract interface class VoicePort {
   Future<void> startVisibleSession();
   Future<void> speak(String text, {double rate});
   Future<String?> listen();
+  Future<void> recover();
   Future<void> stop();
 }
 
@@ -197,6 +198,15 @@ class VoiceService implements VoicePort {
       if (identical(_turn, turn)) _turn = null;
       await _speech.stop();
     }
+  }
+
+  @override
+  Future<void> recover() async {
+    if (_stopped) return;
+    _finishTurn(null);
+    await _speech.cancel();
+    _ready = false;
+    await initialize();
   }
 
   void _finishTurn(String? words) {
