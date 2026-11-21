@@ -56,6 +56,18 @@ class MainActivity : FlutterActivity() {
                         result.error("SERVICE_START", error.message, null)
                     }
                 }
+                "listen" -> {
+                    val sessionService = SessionService.activeInstance
+                    if (sessionService == null) {
+                        result.error("SESSION_NOT_ACTIVE", "The microphone session is not active.", null)
+                    } else {
+                        sessionService.listen(result)
+                    }
+                }
+                "recoverRecognizer" -> {
+                    SessionService.activeInstance?.recoverSpeechRecognizer()
+                    result.success(null)
+                }
                 "stop" -> {
                     val intent = Intent(this, SessionService::class.java)
                         .setAction(SessionService.ACTION_STOP)

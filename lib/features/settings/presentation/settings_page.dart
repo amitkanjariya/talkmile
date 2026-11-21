@@ -4,7 +4,6 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talkmile/core/audio/voice_service.dart';
 import 'package:talkmile/core/data/local_store.dart';
-import 'package:talkmile/core/theme/app_theme.dart';
 import 'package:talkmile/core/widgets/brand.dart';
 import 'package:talkmile/features/settings/presentation/settings_cubit.dart';
 
@@ -148,9 +147,11 @@ class _SettingsPageState extends State<SettingsPage> {
             builder: (context, snapshot) {
               final status = snapshot.data;
               if (status == null) {
-                return const Text(
+                return Text(
                   'Checking microphone and notification permissions…',
-                  style: TextStyle(color: AppColors.muted),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 );
               }
               return Column(

@@ -62,6 +62,7 @@ class VoiceService implements VoicePort {
   String _partial = '';
   bool _ready = false;
   bool _stopped = false;
+  bool _sessionActive = false;
   @override
   void Function()? onNotificationStop;
 
@@ -104,6 +105,7 @@ class VoiceService implements VoicePort {
     }
     _stopped = false;
     await _session.invokeMethod<void>('start');
+    _sessionActive = true;
   }
 
   Future<Map<String, bool>> permissionStatus() async {
@@ -170,6 +172,11 @@ class VoiceService implements VoicePort {
   @override
   Future<String?> listen() async {
     if (_stopped) return null;
+    if (_sessionActive) {
+      return _session.invokeMethod<String>('listen').timeout(
+        const Duration(seconds: 60),
+      );
+    }
     if (_turn != null) throw StateError('A listening turn is already active.');
     _partial = '';
     final turn = Completer<String?>();
@@ -203,6 +210,10 @@ class VoiceService implements VoicePort {
   @override
   Future<void> recover() async {
     if (_stopped) return;
+    if (_sessionActive) {
+      await _session.invokeMethod<void>('recoverRecognizer');
+      return;
+    }
     _finishTurn(null);
     await _speech.cancel();
     _ready = false;
@@ -217,6 +228,7 @@ class VoiceService implements VoicePort {
   @override
   Future<void> stop() async {
     _stopped = true;
+    _sessionActive = false;
     _finishTurn(null);
     await _speech.cancel();
     await _tts.stop();

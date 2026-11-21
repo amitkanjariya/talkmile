@@ -60,24 +60,27 @@ abstract final class AppTheme {
       textTheme: base.textTheme
           .apply(bodyColor: foreground, displayColor: foreground)
           .copyWith(
-            displayLarge: const TextStyle(
+            displayLarge: TextStyle(
               fontSize: 38,
               height: 1.08,
               fontWeight: FontWeight.w600,
               letterSpacing: -1.2,
+              color: foreground,
             ),
-            headlineMedium: const TextStyle(
+            headlineMedium: TextStyle(
               fontSize: 27,
               height: 1.18,
               fontWeight: FontWeight.w600,
               letterSpacing: -.6,
+              color: foreground,
             ),
-            titleLarge: const TextStyle(
+            titleLarge: TextStyle(
               fontSize: 19,
               height: 1.25,
               fontWeight: FontWeight.w600,
+              color: foreground,
             ),
-            bodyLarge: const TextStyle(fontSize: 16, height: 1.45),
+            bodyLarge: TextStyle(fontSize: 16, height: 1.45, color: foreground),
             bodyMedium: TextStyle(fontSize: 14, height: 1.4, color: muted),
           ),
       cardTheme: CardThemeData(

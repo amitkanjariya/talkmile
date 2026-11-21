@@ -51,21 +51,31 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   Future<void> _stopGuide() async {
     ++_guideToken;
-    if (mounted) setState(() { _guideActive = false; _guideStatus = ''; });
+    if (mounted) {
+      setState(() {
+        _guideActive = false;
+        _guideStatus = '';
+      });
+    }
     await GetIt.I<VoiceService>().cancelGuide();
   }
 
   Future<void> _startGuide() async {
     final token = ++_guideToken;
-    setState(() { _guideActive = true; _guideStatus = 'Preparing voice guide'; });
+    setState(() {
+      _guideActive = true;
+      _guideStatus = 'Preparing voice guide';
+    });
     final voice = GetIt.I<VoiceService>();
     try {
       await voice.initialize();
       await voice.selectVoice('female');
       while (mounted && token == _guideToken) {
         setState(() => _guideStatus = 'Explaining step ${step + 1}');
-        await voice.speak('${items[step].$2}. ${items[step].$3} '
-            'Say next, back, or repeat.');
+        await voice.speak(
+          '${items[step].$2}. ${items[step].$3} '
+          'Say next, back, or repeat.',
+        );
         if (!mounted || token != _guideToken) break;
         setState(() => _guideStatus = 'Listening for next, back, or repeat');
         final heard = await voice.listen();
@@ -83,7 +93,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
       }
     } catch (error) {
       if (mounted && token == _guideToken) {
-        setState(() => _guideStatus = 'Voice guide unavailable. You can use Continue.');
+        setState(
+          () => _guideStatus = 'Voice guide unavailable. You can use Continue.',
+        );
       }
     } finally {
       if (mounted && token == _guideToken) {
@@ -118,7 +130,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   color: AppColors.teal.withValues(alpha: .18),
                   borderRadius: BorderRadius.circular(28),
                 ),
-                child: Icon(item.$1, size: 44, color: AppColors.brass),
+                child: Icon(
+                  item.$1,
+                  size: 44,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
               const SizedBox(height: 32),
               SectionLabel('0${step + 1} / 03'),
@@ -127,24 +143,36 @@ class _OnboardingPageState extends State<OnboardingPage> {
               const SizedBox(height: 20),
               Text(
                 item.$3,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(color: AppColors.muted),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const Spacer(),
-              const Text(
+              Text(
                 'Before riding, choose your companion and grant microphone access while parked.',
-                style: TextStyle(color: AppColors.muted, height: 1.4),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 24),
               if (_guideStatus.isNotEmpty) ...[
-                Text(_guideStatus, style: const TextStyle(color: AppColors.brass)),
+                Text(
+                  _guideStatus,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
                 const SizedBox(height: 10),
               ],
               OutlinedButton.icon(
                 onPressed: _guideActive ? _stopGuide : _startGuide,
-                icon: Icon(_guideActive ? Icons.stop_rounded : Icons.mic_none_rounded),
-                label: Text(_guideActive ? 'Stop voice guide' : 'Use voice guide'),
+                icon: Icon(
+                  _guideActive ? Icons.stop_rounded : Icons.mic_none_rounded,
+                ),
+                label: Text(
+                  _guideActive ? 'Stop voice guide' : 'Use voice guide',
+                ),
               ),
               const SizedBox(height: 10),
               FilledButton(

@@ -44,7 +44,7 @@ class SectionLabel extends StatelessWidget {
     style: Theme.of(context).textTheme.labelMedium?.copyWith(
       letterSpacing: 2.0,
       fontWeight: FontWeight.w700,
-      color: AppColors.brass,
+      color: Theme.of(context).colorScheme.primary,
     ),
   );
 }
