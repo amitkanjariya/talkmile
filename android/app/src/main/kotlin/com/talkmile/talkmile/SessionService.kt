@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.util.Log
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -27,16 +28,16 @@ class SessionService : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var pendingListenResult: MethodChannel.Result? = null
     private var partialTranscript = ""
-    private var recognitionAttempt = 0
-    private var restartCount = 0
+    private var preferOnDeviceRecognizer = false
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var listeningTimeout: Runnable? = null
+    private val listeningTimeout = Runnable { finishListening(partialTranscript) }
 
     companion object {
         const val ACTION_START = "com.talkmile.talkmile.START"
         const val ACTION_STOP = "com.talkmile.talkmile.STOP"
         private const val CHANNEL_ID = "talkmile_conversation"
         private const val NOTIFICATION_ID = 1001
+        private const val TAG = "TalkMileSession"
 
         @Volatile
         var activeInstance: SessionService? = null
@@ -48,6 +49,8 @@ class SessionService : Service() {
     override fun onCreate() {
         super.onCreate()
         activeInstance = this
+        preferOnDeviceRecognizer = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(applicationContext)
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(
             CHANNEL_ID, "Active conversation", NotificationManager.IMPORTANCE_LOW))
@@ -105,58 +108,38 @@ class SessionService : Service() {
         }
 
         partialTranscript = ""
-        restartCount = 0
         pendingListenResult = result
-        startListeningAttempt()
-    }
-
-    fun recoverSpeechRecognizer() {
-        if (pendingListenResult != null) restartListening(0L)
-    }
-
-    private fun startListeningAttempt() {
-        if (pendingListenResult == null) return
-        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) !=
-            PackageManager.PERMISSION_GRANTED) {
-            finishListening(errorCode = SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS,
-                message = "Microphone permission is required.")
-            return
-        }
-
-        val attempt = ++recognitionAttempt
         try {
-            val recognizer = SpeechRecognizer.createSpeechRecognizer(applicationContext)
+            val recognizer = createRecognizer()
             speechRecognizer = recognizer
             recognizer.setRecognitionListener(object : RecognitionListener {
-                private fun isCurrent() = speechRecognizer === recognizer &&
-                    recognitionAttempt == attempt && pendingListenResult != null
-
-                override fun onReadyForSpeech(params: Bundle?) {
-                    if (isCurrent()) restartCount = 0
-                }
+                override fun onReadyForSpeech(params: Bundle?) = Unit
                 override fun onBeginningOfSpeech() = Unit
                 override fun onRmsChanged(rmsdB: Float) = Unit
                 override fun onBufferReceived(buffer: ByteArray?) = Unit
                 override fun onEndOfSpeech() = Unit
 
                 override fun onError(error: Int) {
-                    if (!isCurrent()) return
-                    if (partialTranscript.isNotBlank()) {
+                    Log.w(TAG, "Speech recognizer error: $error")
+                    if (preferOnDeviceRecognizer &&
+                        (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
+                            error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)) {
+                        preferOnDeviceRecognizer = false
+                    }
+                    if (error == SpeechRecognizer.ERROR_NO_MATCH ||
+                        error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                         finishListening(partialTranscript)
                     } else {
-                        restartListening()
+                        finishListening(errorCode = error)
                     }
                 }
 
                 override fun onResults(results: Bundle?) {
-                    if (!isCurrent()) return
                     val transcript = bestTranscript(results).ifBlank { partialTranscript }
-                    if (transcript.isNotBlank()) finishListening(transcript)
-                    else restartListening()
+                    finishListening(transcript)
                 }
 
                 override fun onPartialResults(partialResults: Bundle?) {
-                    if (!isCurrent()) return
                     val latest = bestTranscript(partialResults)
                     if (latest.isNotBlank()) partialTranscript = latest
                 }
@@ -169,37 +152,35 @@ class SessionService : Service() {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
             recognizer.startListening(intent)
-
-            val timeout = Runnable {
-                if (speechRecognizer !== recognizer || recognitionAttempt != attempt ||
-                    pendingListenResult == null) return@Runnable
-                if (partialTranscript.isNotBlank()) finishListening(partialTranscript)
-                else restartListening()
-            }
-            listeningTimeout = timeout
-            mainHandler.postDelayed(timeout, 55_000L)
-        } catch (_: Exception) {
-            restartListening()
+            mainHandler.postDelayed(listeningTimeout, 55_000L)
+            Log.i(TAG, "Started ${if (preferOnDeviceRecognizer) "on-device" else "system"} recognition turn")
+        } catch (error: Exception) {
+            Log.e(TAG, "Could not start speech recognition", error)
+            finishListening(errorCode = SpeechRecognizer.ERROR_CLIENT,
+                message = error.message ?: "Could not start speech recognition.")
         }
     }
 
-    private fun restartListening(delayMillis: Long? = null) {
-        if (pendingListenResult == null) return
-        listeningTimeout?.let(mainHandler::removeCallbacks)
-        listeningTimeout = null
-        recognitionAttempt++
-        val oldRecognizer = speechRecognizer
-        speechRecognizer = null
-        oldRecognizer?.cancel()
-        oldRecognizer?.destroy()
+    fun recoverSpeechRecognizer() {
+        if (pendingListenResult != null) {
+            finishListening(errorCode = SpeechRecognizer.ERROR_CLIENT,
+                message = "Speech recognition timed out and is restarting.")
+        }
+    }
 
-        val delay = delayMillis ?: minOf(
-            500L * (1L shl minOf(restartCount++, 2)),
-            2_000L,
-        )
-        mainHandler.postDelayed({ startListeningAttempt() }, delay)
+    private fun createRecognizer(): SpeechRecognizer {
+        if (preferOnDeviceRecognizer) {
+            try {
+                return SpeechRecognizer.createOnDeviceSpeechRecognizer(applicationContext)
+            } catch (error: UnsupportedOperationException) {
+                Log.w(TAG, "On-device recognition unavailable; using system recognizer", error)
+                preferOnDeviceRecognizer = false
+            }
+        }
+        return SpeechRecognizer.createSpeechRecognizer(applicationContext)
     }
 
     private fun bestTranscript(bundle: Bundle?): String =
@@ -213,9 +194,7 @@ class SessionService : Service() {
     ) {
         val result = pendingListenResult ?: return
         pendingListenResult = null
-        listeningTimeout?.let(mainHandler::removeCallbacks)
-        listeningTimeout = null
-        recognitionAttempt++
+        mainHandler.removeCallbacks(listeningTimeout)
         val recognizer = speechRecognizer
         speechRecognizer = null
         recognizer?.cancel()
