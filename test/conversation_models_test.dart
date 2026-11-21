@@ -6,6 +6,11 @@ void main() {
   test('voice commands recognize natural variants', () {
     expect(interpretVoiceCommand('Please repeat that.'), VoiceCommand.repeat);
     expect(
+      interpretVoiceCommand('Could you repeat the question?'),
+      VoiceCommand.repeat,
+    );
+    expect(interpretVoiceCommand('One more time, please'), VoiceCommand.repeat);
+    expect(
       interpretVoiceCommand('Can you speak more slowly?'),
       VoiceCommand.slower,
     );
@@ -30,6 +35,32 @@ void main() {
     expect(reply.correction, 'I went to the market.');
     expect(reply.vocabulary, ['curious']);
     expect(reply.chapterCompleted, isTrue);
+  });
+
+  test('AI response keeps every structured learner correction', () {
+    final reply = CoachResponse.fromJson({
+      'spokenText': 'That sounds like a busy day.',
+      'nextQuestion': 'What happened after that?',
+      'corrections': [
+        {
+          'original': 'I go yesterday',
+          'improved': 'I went yesterday',
+          'explanation': 'Use the past form for a finished time.',
+        },
+        {
+          'original': 'in market',
+          'improved': 'at the market',
+          'explanation': 'Use “at” with this place.',
+        },
+      ],
+      'storyState': '',
+      'chapterCompleted': false,
+      'newVocabulary': [],
+    });
+
+    expect(reply.corrections, hasLength(2));
+    expect(reply.correction, 'I went yesterday');
+    expect(reply.corrections.last.explanation, 'Use “at” with this place.');
   });
 
   test('AI response rejects missing spoken text', () {

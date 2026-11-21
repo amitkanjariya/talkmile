@@ -1,5 +1,29 @@
 import 'dart:convert';
 
+class LearnerCorrection {
+  const LearnerCorrection({
+    required this.original,
+    required this.improved,
+    required this.explanation,
+  });
+
+  final String original;
+  final String improved;
+  final String explanation;
+
+  Map<String, String> toJson() => {
+    'original': original,
+    'improved': improved,
+    'explanation': explanation,
+  };
+
+  factory LearnerCorrection.fromJson(Map value) => LearnerCorrection(
+    original: value['original'] as String? ?? '',
+    improved: value['improved'] as String? ?? '',
+    explanation: value['explanation'] as String? ?? '',
+  );
+}
+
 enum SessionPhase {
   idle,
   initializing,
@@ -19,6 +43,7 @@ class CoachResponse {
     required this.storyState,
     required this.difficulty,
     this.correction,
+    this.corrections = const [],
     this.vocabulary = const [],
     this.chapterCompleted = false,
   });
@@ -27,6 +52,7 @@ class CoachResponse {
   final String storyState;
   final String difficulty;
   final String? correction;
+  final List<LearnerCorrection> corrections;
   final List<String> vocabulary;
   final bool chapterCompleted;
 
@@ -45,7 +71,22 @@ class CoachResponse {
       throw const FormatException('AI response is incomplete.');
     }
     final correction = data['correction'];
-    final improved = correction is Map ? correction['improved'] : null;
+    final legacyImproved = correction is Map ? correction['improved'] : null;
+    final corrections = data['corrections'] is List
+        ? (data['corrections'] as List)
+              .whereType<Map>()
+              .map(LearnerCorrection.fromJson)
+              .where(
+                (item) => item.original.isNotEmpty && item.improved.isNotEmpty,
+              )
+              .toList()
+        : <LearnerCorrection>[];
+    if (corrections.isEmpty && correction is Map) {
+      final legacy = LearnerCorrection.fromJson(correction);
+      if (legacy.original.isNotEmpty && legacy.improved.isNotEmpty) {
+        corrections.add(legacy);
+      }
+    }
     return CoachResponse(
       spokenText: spoken.trim(),
       nextQuestion: question.trim(),
@@ -58,7 +99,12 @@ class CoachResponse {
       difficulty: data['difficulty'] is String
           ? data['difficulty'] as String
           : 'intermediate',
-      correction: improved is String && improved.isNotEmpty ? improved : null,
+      correction: corrections.isNotEmpty
+          ? corrections.first.improved
+          : legacyImproved is String && legacyImproved.isNotEmpty
+          ? legacyImproved
+          : null,
+      corrections: corrections,
       vocabulary: data['newVocabulary'] is List
           ? (data['newVocabulary'] as List).whereType<String>().take(5).toList()
           : const [],

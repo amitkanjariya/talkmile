@@ -26,4 +26,24 @@ void main() {
       );
     },
   );
+
+  test(
+    'offline daily vocabulary contains useful intermediate stretch words',
+    () {
+      final words = vocabularyBank.map((entry) => entry.word).toSet();
+      expect(
+        words,
+        containsAll([
+          'overwhelmed',
+          'postpone',
+          'clarify',
+          'sort out',
+          'compromise',
+          'reassure',
+          'worthwhile',
+          'keep track of',
+        ]),
+      );
+    },
+  );
 }

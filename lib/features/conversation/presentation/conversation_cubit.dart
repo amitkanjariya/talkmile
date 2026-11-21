@@ -14,13 +14,17 @@ class ConversationCubit extends Cubit<ConversationState> {
     required this.voice,
     required this.gateway,
     required this.store,
-  }) : super(const ConversationState()) {
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       super(const ConversationState()) {
     voice.onNotificationStop = stop;
   }
   final VoicePort voice;
   final AiGatewayPort gateway;
   final LocalStore store;
+  final DateTime Function() _now;
   final List<Map<String, String>> _recent = [];
+  final List<LearnerCorrection> _correctionHistory = [];
   CancelToken? _request;
   Future<void>? _stopping;
   Timer? _timer;
@@ -51,6 +55,10 @@ class ConversationCubit extends Cubit<ConversationState> {
     }
     final generation = ++_generation;
     _chapters = 0;
+    _recent.clear();
+    _correctionHistory.clear();
+    _lastCorrection = '';
+    _lastSpeech = '';
     emit(
       ConversationState(
         phase: SessionPhase.initializing,
@@ -70,7 +78,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         await voice.stop();
         return false;
       }
-      _startedAt = DateTime.now();
+      _startedAt = _now();
       _nextCorrectionReview = _startedAt!.add(const Duration(minutes: 5));
       _weeklyVocabularyReview = await store.shouldReviewWeeklyVocabulary();
       _timer?.cancel();
@@ -123,14 +131,11 @@ class ConversationCubit extends Cubit<ConversationState> {
             status: 'Thinking about your answer',
           ),
         );
-        final correctionReview =
+        final correctionReviewDue =
             _nextCorrectionReview != null &&
-            !DateTime.now().isBefore(_nextCorrectionReview!);
-        if (correctionReview) {
-          _nextCorrectionReview = DateTime.now().add(
-            const Duration(minutes: 5),
-          );
-        }
+            !_now().isBefore(_nextCorrectionReview!);
+        final correctionReview =
+            correctionReviewDue && _correctionHistory.isNotEmpty;
         final persona = personaFor(store.companion);
         final reviewWords = _weeklyVocabularyReview
             ? await store.weeklyVocabularyWords()
@@ -154,6 +159,9 @@ class ConversationCubit extends Cubit<ConversationState> {
               persona:
                   '${persona.name}, age ${persona.age}, ${persona.gender}, your ${persona.role}; ${persona.style}.',
               correctionReview: correctionReview,
+              correctionHistory: correctionReview
+                  ? _correctionHistory.map((item) => item.toJson()).toList()
+                  : const [],
               reviewWords: reviewWords,
               recentTurns: _recent,
               cancelToken: _request!,
@@ -181,6 +189,14 @@ class ConversationCubit extends Cubit<ConversationState> {
           }
         }
         if (reply == null || generation != _generation) break;
+        if (correctionReviewDue) {
+          _nextCorrectionReview = _now().add(const Duration(minutes: 5));
+        }
+        if (correctionReview) _correctionHistory.clear();
+        _correctionHistory.addAll(reply.corrections);
+        if (_correctionHistory.length > 16) {
+          _correctionHistory.removeRange(0, _correctionHistory.length - 16);
+        }
         if (_weeklyVocabularyReview) {
           await store.markWeeklyVocabularyReview();
           _weeklyVocabularyReview = false;
@@ -194,6 +210,9 @@ class ConversationCubit extends Cubit<ConversationState> {
           'topic': state.topic,
         });
         await store.recordInsights(reply.vocabulary, reply.correction);
+        for (final correction in reply.corrections.skip(1)) {
+          await store.recordInsights(const [], correction.improved);
+        }
         _remember(utterance, _lastSpeech);
         emit(
           state.copyWith(

@@ -18,7 +18,12 @@ VoiceCommand? interpretVoiceCommand(String utterance) {
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z ]'), '')
       .trim();
-  if (RegExp(r'^(please )?(repeat|say that again|repeat that)').hasMatch(input)) {
+  if (RegExp(
+        r'^(please )?(repeat( that| it| the question)?|say (that|it) again|one more time)( please)?$',
+      ).hasMatch(input) ||
+      RegExp(
+        r'^(can|could|would) you (please )?(repeat( that| it| the question)?|say (that|it) again)$',
+      ).hasMatch(input)) {
     return VoiceCommand.repeat;
   }
   if (input.contains('more slowly') || input.contains('slow down')) {

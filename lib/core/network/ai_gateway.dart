@@ -14,6 +14,7 @@ abstract interface class AiGatewayPort {
     String persona =
         'Mira, a friendly neighbor in her late twenties; warm and relaxed',
     bool correctionReview = false,
+    List<Map<String, String>> correctionHistory = const [],
     List<String> reviewWords = const [],
     required List<Map<String, String>> recentTurns,
     required CancelToken cancelToken,
@@ -78,6 +79,7 @@ class AiGateway implements AiGatewayPort {
     String persona =
         'Mira, a friendly neighbor in her late twenties; warm and relaxed',
     bool correctionReview = false,
+    List<Map<String, String>> correctionHistory = const [],
     List<String> reviewWords = const [],
     required List<Map<String, String>> recentTurns,
     required CancelToken cancelToken,
@@ -101,6 +103,7 @@ class AiGateway implements AiGatewayPort {
             'storyState': storyState,
             'persona': persona,
             'correctionReview': correctionReview,
+            'correctionHistory': correctionHistory.take(16).toList(),
             'reviewWords': reviewWords.take(10).toList(),
             'recentTurns': recentTurns.take(8).toList(),
           },
