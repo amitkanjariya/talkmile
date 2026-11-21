@@ -20,7 +20,7 @@ TalkMile is an Android-first Flutter application for spoken English practice. It
 2. Run `flutter pub get` and `flutter run` from this directory.
 3. Deploy the Worker using the instructions in [worker/README.md](worker/README.md). Choose a currently available Gemini text model with a free tier in your own AI Studio project. The Gemini key stays on the Worker.
 4. In TalkMile Settings, enter your HTTPS Worker endpoint ending in `/v1/reply` and the access token. This setup step is outside the voice-only learning flow.
-5. Choose a companion, allow microphone access while the app is visible, and start a conversation while safely parked.
+5. Choose a companion, allow microphone access while the app is visible, approve Android's unrestricted battery-use prompt for screen-off conversations, and start a conversation while safely parked. On OnePlus, also enable **Allow background activity** under TalkMile's app battery settings if screen-off replies still pause.
 
 Release builds are never signed with the debug key. To sign a release, set `TALKMILE_KEYSTORE`, `TALKMILE_STORE_PASSWORD`, `TALKMILE_KEY_ALIAS`, and `TALKMILE_KEY_PASSWORD` in your local environment before `flutter build appbundle --release`. Keep the keystore and credentials outside source control.
 

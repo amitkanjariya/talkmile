@@ -47,7 +47,7 @@ abstract interface class VoicePort {
   set onNotificationStop(void Function()? callback);
   Future<void> initialize();
   Future<String> selectVoice(String partner);
-  Future<void> startVisibleSession();
+  Future<String?> startVisibleSession();
   Future<void> speak(String text, {double rate});
   Future<String?> listen();
   Future<void> recover();
@@ -94,7 +94,7 @@ class VoiceService implements VoicePort {
   }
 
   @override
-  Future<void> startVisibleSession() async {
+  Future<String?> startVisibleSession() async {
     final notificationAllowed = await _session.invokeMethod<bool>(
       'requestNotificationPermission',
     );
@@ -103,9 +103,15 @@ class VoiceService implements VoicePort {
         'Allow notifications to show the active microphone session.',
       );
     }
+    final backgroundAllowed = await _session.invokeMethod<bool>(
+      'requestBackgroundBatteryAccess',
+    );
     _stopped = false;
     await _session.invokeMethod<void>('start');
     _sessionActive = true;
+    return backgroundAllowed == true
+        ? null
+        : 'For screen-off replies, allow TalkMile unrestricted battery use.';
   }
 
   Future<Map<String, bool>> permissionStatus() async {
@@ -117,6 +123,10 @@ class VoiceService implements VoicePort {
 
   Future<void> openAppSettings() =>
       _session.invokeMethod<void>('openAppSettings');
+
+  Future<bool> requestBackgroundBatteryAccess() async =>
+      await _session.invokeMethod<bool>('requestBackgroundBatteryAccess') ==
+      true;
 
   Future<List<CompanionVoice>> availableVoices() async {
     await initialize();

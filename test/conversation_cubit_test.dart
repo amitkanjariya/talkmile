@@ -23,7 +23,7 @@ class FakeVoice implements VoicePort {
   @override
   Future<String> selectVoice(String partner) async => 'Using test voice';
   @override
-  Future<void> startVisibleSession() async {}
+  Future<String?> startVisibleSession() async => null;
   @override
   Future<void> speak(String text, {double rate = .48}) async {
     spoken.add(text);

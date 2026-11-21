@@ -65,7 +65,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         personaFor(store.companion).gender,
       );
       if (generation != _generation) return false;
-      await voice.startVisibleSession();
+      final backgroundNotice = await voice.startVisibleSession();
       if (generation != _generation) {
         await voice.stop();
         return false;
@@ -79,7 +79,14 @@ class ConversationCubit extends Cubit<ConversationState> {
           emit(state.copyWith(elapsed: DateTime.now().difference(_startedAt!)));
         }
       });
-      emit(state.copyWith(voiceNotice: notice));
+      emit(
+        state.copyWith(
+          voiceNotice: [notice, backgroundNotice]
+              .whereType<String>()
+              .where((text) => text.isNotEmpty)
+              .join(' '),
+        ),
+      );
       unawaited(_run(generation, topic: topic));
       return true;
     } catch (error) {

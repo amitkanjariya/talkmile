@@ -163,6 +163,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   Text(
                     'Notifications: ${status['notification'] == true ? 'Allowed' : 'Not allowed'}',
                   ),
+                  Text(
+                    'Screen-off access: ${status['batteryOptimization'] == true ? 'Allowed' : 'Needs permission'}',
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final allowed = await GetIt.I<VoiceService>()
+                          .requestBackgroundBatteryAccess();
+                      if (!context.mounted) return;
+                      setState(() => message = allowed
+                          ? 'Screen-off battery access is enabled.'
+                          : 'Allow unrestricted battery use in Android settings for screen-off replies.');
+                    },
+                    child: const Text('Allow screen-off conversations'),
+                  ),
                   TextButton(
                     onPressed: GetIt.I<VoiceService>().openAppSettings,
                     child: const Text('Open Android app permissions'),
