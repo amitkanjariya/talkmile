@@ -91,6 +91,18 @@ class MainActivity : FlutterActivity() {
                         sessionService.listen(result)
                     }
                 }
+                "speak" -> {
+                    val sessionService = SessionService.activeInstance
+                    val text = call.argument<String>("text").orEmpty()
+                    val rate = call.argument<Double>("rate") ?: 0.48
+                    val voiceName = call.argument<String>("voiceName")
+                    val locale = call.argument<String>("locale")
+                    if (sessionService == null) {
+                        result.error("SESSION_NOT_ACTIVE", "The speaking session is not active.", null)
+                    } else {
+                        sessionService.speak(text, rate, voiceName, locale, result)
+                    }
+                }
                 "recoverRecognizer" -> {
                     SessionService.activeInstance?.recoverSpeechRecognizer()
                     result.success(null)

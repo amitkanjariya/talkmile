@@ -63,6 +63,8 @@ class VoiceService implements VoicePort {
   bool _ready = false;
   bool _stopped = false;
   bool _sessionActive = false;
+  String? _selectedVoiceName;
+  String? _selectedVoiceLocale;
   @override
   void Function()? onNotificationStop;
 
@@ -158,9 +160,13 @@ class VoiceService implements VoicePort {
     final voices = await availableVoices();
     final selected = chooseCompanionVoice(voices, partner);
     if (selected == null) {
+      _selectedVoiceName = null;
+      _selectedVoiceLocale = 'en-IN';
       await _tts.setLanguage('en-IN');
       return 'No installed English voice was reported. Your device will use its default speech voice.';
     }
+    _selectedVoiceName = selected.name;
+    _selectedVoiceLocale = selected.locale;
     final marker = partner == 'male'
         ? RegExp(r'\b(male|man)\b', caseSensitive: false)
         : RegExp(r'\b(female|woman)\b', caseSensitive: false);
@@ -179,6 +185,15 @@ class VoiceService implements VoicePort {
   @override
   Future<void> speak(String text, {double rate = .48}) async {
     if (_stopped) return;
+    if (_sessionActive) {
+      await _session.invokeMethod<void>('speak', {
+        'text': text,
+        'rate': rate,
+        'voiceName': _selectedVoiceName,
+        'locale': _selectedVoiceLocale,
+      });
+      return;
+    }
     await _speech.stop();
     await _tts.setSpeechRate(rate);
     await _tts.speak(text);

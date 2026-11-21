@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.content.pm.PackageManager
@@ -14,11 +16,16 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.util.Locale
+import java.util.UUID
 
 /** Visible session lifetime and microphone recognition owner. Recognition is
  * restarted per turn while this foreground service remains active.
@@ -29,8 +36,22 @@ class SessionService : Service() {
     private var pendingListenResult: MethodChannel.Result? = null
     private var partialTranscript = ""
     private var preferOnDeviceRecognizer = false
+    private var textToSpeech: TextToSpeech? = null
+    private var ttsReady = false
+    private var pendingSpeech: PendingSpeech? = null
+    private var speechPlayer: MediaPlayer? = null
+    private var speechFile: File? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val listeningTimeout = Runnable { finishListening(partialTranscript) }
+
+    private data class PendingSpeech(
+        val text: String,
+        val rate: Float,
+        val voiceName: String?,
+        val locale: String?,
+        val result: MethodChannel.Result,
+        val utteranceId: String = UUID.randomUUID().toString(),
+    )
 
     companion object {
         const val ACTION_START = "com.talkmile.talkmile.START"
@@ -54,11 +75,13 @@ class SessionService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(
             CHANNEL_ID, "Active conversation", NotificationManager.IMPORTANCE_LOW))
+        initializeTextToSpeech()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             finishListening(errorCode = SpeechRecognizer.ERROR_CLIENT)
+            stopSpeech()
             MainActivity.notifyNotificationStop()
             releaseSessionWakeLock()
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -171,6 +194,165 @@ class SessionService : Service() {
         }
     }
 
+    /** Synthesize to a file, then play it from this foreground service. The
+     * Google TTS engine's own background audio track is muted on some devices;
+     * playing the synthesized file under TalkMile's mediaPlayback FGS avoids
+     * that separate-UID background playback restriction.
+     */
+    fun speak(
+        text: String,
+        rate: Double,
+        voiceName: String?,
+        locale: String?,
+        result: MethodChannel.Result,
+    ) {
+        if (text.isBlank()) {
+            result.success(null)
+            return
+        }
+        if (pendingSpeech != null || speechPlayer != null) {
+            result.error("TTS_BUSY", "TalkMile is already speaking.", null)
+            return
+        }
+        val request = PendingSpeech(
+            text = text,
+            rate = rate.toFloat().coerceIn(0.1f, 2.0f),
+            voiceName = voiceName,
+            locale = locale,
+            result = result,
+        )
+        pendingSpeech = request
+        if (ttsReady) synthesize(request)
+    }
+
+    private fun initializeTextToSpeech() {
+        textToSpeech = TextToSpeech(applicationContext) { status ->
+            if (status != TextToSpeech.SUCCESS) {
+                ttsReady = true
+                Log.e(TAG, "Text-to-speech initialization failed: $status")
+                failPendingSpeech("Text-to-speech could not be initialized.")
+                return@TextToSpeech
+            }
+            val tts = textToSpeech ?: return@TextToSpeech
+            tts.setLanguage(Locale("en", "IN"))
+            tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) = Unit
+
+                override fun onDone(utteranceId: String?) {
+                    if (utteranceId != pendingSpeech?.utteranceId) return
+                    mainHandler.post { playPendingSpeechFile() }
+                }
+
+                @Deprecated("Deprecated in Android, retained for TTS engine compatibility")
+                override fun onError(utteranceId: String?) {
+                    if (utteranceId == pendingSpeech?.utteranceId) {
+                        mainHandler.post { failPendingSpeech("Speech synthesis failed.") }
+                    }
+                }
+
+                override fun onError(utteranceId: String?, errorCode: Int) {
+                    if (utteranceId == pendingSpeech?.utteranceId) {
+                        mainHandler.post { failPendingSpeech("Speech synthesis failed ($errorCode).") }
+                    }
+                }
+            })
+            ttsReady = true
+            pendingSpeech?.let(::synthesize)
+        }
+    }
+
+    private fun synthesize(request: PendingSpeech) {
+        if (pendingSpeech !== request) return
+        val tts = textToSpeech ?: run {
+            failPendingSpeech("Text-to-speech is unavailable.")
+            return
+        }
+        request.locale?.let { rawLocale ->
+            val locale = Locale.forLanguageTag(rawLocale.replace('_', '-'))
+            if (locale.language.isNotEmpty()) tts.setLanguage(locale)
+        }
+        request.voiceName?.let { requestedName ->
+            tts.voices?.firstOrNull { it.name == requestedName }?.let(tts::setVoice)
+        }
+        tts.setSpeechRate(request.rate)
+        val file = File(cacheDir, "talkmile-${request.utteranceId}.wav")
+        speechFile = file
+        val params = Bundle().apply {
+            putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, request.utteranceId)
+        }
+        val result = tts.synthesizeToFile(request.text, params, file, request.utteranceId)
+        if (result != TextToSpeech.SUCCESS) {
+            failPendingSpeech("Text-to-speech could not create audio ($result).")
+        }
+    }
+
+    private fun playPendingSpeechFile() {
+        val request = pendingSpeech ?: return
+        val file = speechFile ?: run {
+            failPendingSpeech("Speech audio was not created.")
+            return
+        }
+        if (!file.isFile || file.length() == 0L) {
+            failPendingSpeech("Speech audio is empty.")
+            return
+        }
+        try {
+            val player = MediaPlayer()
+            speechPlayer = player
+            player.setAudioAttributes(AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build())
+            player.setDataSource(file.absolutePath)
+            player.setOnPreparedListener { prepared ->
+                if (pendingSpeech === request) {
+                    prepared.start()
+                    Log.i(TAG, "Foreground reply playback started")
+                }
+            }
+            player.setOnCompletionListener {
+                releaseSpeechPlayer()
+                pendingSpeech = null
+                Log.i(TAG, "Foreground reply playback completed")
+                request.result.success(null)
+            }
+            player.setOnErrorListener { _, what, extra ->
+                failPendingSpeech("Speech audio playback failed ($what/$extra).")
+                true
+            }
+            player.prepareAsync()
+        } catch (error: Exception) {
+            Log.e(TAG, "Could not play synthesized speech", error)
+            failPendingSpeech("Speech audio playback failed.")
+        }
+    }
+
+    private fun releaseSpeechPlayer() {
+        speechPlayer?.let { player ->
+            try { player.stop() } catch (_: IllegalStateException) {}
+            player.reset()
+            player.release()
+        }
+        speechPlayer = null
+        speechFile?.delete()
+        speechFile = null
+    }
+
+    private fun failPendingSpeech(message: String) {
+        val request = pendingSpeech ?: return
+        pendingSpeech = null
+        releaseSpeechPlayer()
+        request.result.error("TTS_FAILED", message, null)
+    }
+
+    private fun stopSpeech() {
+        val request = pendingSpeech
+        pendingSpeech = null
+        textToSpeech?.stop()
+        releaseSpeechPlayer()
+        request?.result?.success(null)
+    }
+
     private fun createRecognizer(): SpeechRecognizer {
         if (preferOnDeviceRecognizer) {
             try {
@@ -199,7 +381,10 @@ class SessionService : Service() {
         speechRecognizer = null
         recognizer?.cancel()
         recognizer?.destroy()
-        if (errorCode == null) result.success(transcript.takeIf { it.isNotBlank() })
+        if (errorCode == null) {
+            Log.i(TAG, "Recognition turn completed: ${if (transcript.isBlank()) "no speech" else "speech received"}")
+            result.success(transcript.takeIf { it.isNotBlank() })
+        }
         else result.error("SPEECH_RECOGNITION", message ?: "Speech recognition error $errorCode.", errorCode)
     }
 
@@ -223,6 +408,10 @@ class SessionService : Service() {
     override fun onDestroy() {
         finishListening(errorCode = SpeechRecognizer.ERROR_CLIENT,
             message = "The microphone session ended.")
+        stopSpeech()
+        textToSpeech?.shutdown()
+        textToSpeech = null
+        ttsReady = false
         releaseSessionWakeLock()
         if (activeInstance === this) activeInstance = null
         super.onDestroy()
