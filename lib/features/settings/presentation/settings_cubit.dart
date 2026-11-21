@@ -10,7 +10,6 @@ class SettingsState {
     this.mode = 'conversation',
     this.correctionFrequency = 'gentle',
     this.themeMode = 'system',
-    this.gatewayUrl = '',
     this.gatewayConfigured = false,
   });
   final bool ready;
@@ -20,7 +19,6 @@ class SettingsState {
   final String mode;
   final String correctionFrequency;
   final String themeMode;
-  final String gatewayUrl;
   final bool gatewayConfigured;
 }
 
@@ -37,10 +35,7 @@ class SettingsCubit extends Cubit<SettingsState> {
       mode: store.mode,
       correctionFrequency: store.correctionFrequency,
       themeMode: store.themeMode,
-      gatewayUrl: store.gatewayUrl,
-      gatewayConfigured:
-          store.gatewayUrl.isNotEmpty &&
-          (await store.getGatewayToken()).isNotEmpty,
+      gatewayConfigured: (await store.getGatewayToken()).isNotEmpty,
     ),
   );
 
@@ -74,15 +69,10 @@ class SettingsCubit extends Cubit<SettingsState> {
     await load();
   }
 
-  Future<void> configureGateway(String url, String token) async {
-    final uri = Uri.tryParse(url.trim());
-    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
-      throw const FormatException('Enter a valid HTTPS gateway URL.');
-    }
+  Future<void> configureGateway(String token) async {
     if (token.trim().isEmpty) {
       throw const FormatException('Enter the gateway access token.');
     }
-    await store.setGatewayUrl(uri.toString());
     await store.setGatewayToken(token.trim());
     await load();
   }

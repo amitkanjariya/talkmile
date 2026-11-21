@@ -17,7 +17,7 @@ This Worker keeps the Gemini API key off the phone. It is intentionally a **pers
    npx wrangler secret put GEMINI_MODEL
    ```
 
-7. Copy the Worker URL from Wrangler, append `/v1/reply`, and enter it with the access token in TalkMile Settings. The app uses the same base URL for `/v1/vocabulary`. Never enter the Gemini key into the app.
+7. TalkMile uses the fixed `talkmile-gateway` Worker URL for `/v1/reply` and `/v1/vocabulary`. Enter only the Worker access token in Settings. Never enter the Gemini key into the app.
 
 `/v1/vocabulary` generates ten practical B1-B2 stretch words and expressions for everyday speech, then caches the set by date and difficulty in KV. Returning to the words screen reuses the cached set; this adds at most one Gemini call per date and difficulty. If the gateway or model quota is unavailable, the app shows a bundled intermediate offline set. Conversation replies carry recent question context to discourage repeats and track each clear learner mistake for a detailed five-minute review. Weekly word review remains part of the learner's normal reply request.
 

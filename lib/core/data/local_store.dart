@@ -8,6 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Keeps aggregate progress in SQLite. Conversation text and gateway credentials
 /// live in Android-backed secure storage, never in the unencrypted database.
 class LocalStore extends GeneratedDatabase {
+  static const fixedGatewayUrl =
+      'https://talkmile-gateway.amitkanjariya28.workers.dev/v1/reply';
+
   LocalStore([QueryExecutor? executor])
     : super(executor ?? driftDatabase(name: 'talkmile'));
 
@@ -35,6 +38,7 @@ class LocalStore extends GeneratedDatabase {
 
   Future<void> open() async {
     _preferences = await SharedPreferences.getInstance();
+    await _preferences.remove('gatewayUrl');
     await customSelect('SELECT 1').get();
   }
 
@@ -139,9 +143,7 @@ class LocalStore extends GeneratedDatabase {
     }
   }
 
-  String get gatewayUrl => _preferences.getString('gatewayUrl') ?? '';
-  Future<void> setGatewayUrl(String value) =>
-      _preferences.setString('gatewayUrl', value);
+  String get gatewayUrl => fixedGatewayUrl;
   Future<String> getGatewayToken() async =>
       await _secure.read(key: 'gatewayToken') ?? '';
   Future<void> setGatewayToken(String value) =>

@@ -101,7 +101,6 @@ void main() {
       FlutterSecureStorage.setMockInitialValues({});
       final store = LocalStore(NativeDatabase.memory());
       await store.open();
-      await store.setGatewayUrl('https://example.com/v1/reply');
       await store.setGatewayToken('test-token');
       final voice = FakeVoice();
       final gateway = FakeGateway();
@@ -135,7 +134,6 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     final store = LocalStore(NativeDatabase.memory());
     await store.open();
-    await store.setGatewayUrl('https://example.com/v1/reply');
     await store.setGatewayToken('test-token');
     final voice = FakeVoice();
     final gateway = FakeGateway()..failuresRemaining = 1;
@@ -164,7 +162,6 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     final store = LocalStore(NativeDatabase.memory());
     await store.open();
-    await store.setGatewayUrl('https://example.com/v1/reply');
     await store.setGatewayToken('test-token');
     final voice = FakeVoice();
     final gateway = FakeGateway()

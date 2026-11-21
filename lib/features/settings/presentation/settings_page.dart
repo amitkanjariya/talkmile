@@ -14,19 +14,11 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final url = TextEditingController();
   final token = TextEditingController();
   String? message;
 
   @override
-  void initState() {
-    super.initState();
-    url.text = GetIt.I<LocalStore>().gatewayUrl;
-  }
-
-  @override
   void dispose() {
-    url.dispose();
     token.dispose();
     super.dispose();
   }
@@ -95,22 +87,13 @@ class _SettingsPageState extends State<SettingsPage> {
           const SectionLabel('Private AI gateway'),
           const SizedBox(height: 12),
           Text(
-            'TalkMile sends recognized text to your gateway. Your Gemini key stays on the server.',
+            'TalkMile uses its fixed private gateway. Your access token is stored securely; the Gemini key stays on the server.',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               height: 1.5,
             ),
           ),
           const SizedBox(height: 16),
-          TextField(
-            controller: url,
-            keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              labelText: 'HTTPS Worker URL',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
           TextField(
             controller: token,
             obscureText: true,
@@ -125,14 +108,14 @@ class _SettingsPageState extends State<SettingsPage> {
           OutlinedButton(
             onPressed: () async {
               try {
-                await cubit.configureGateway(url.text, token.text);
+                await cubit.configureGateway(token.text);
                 token.clear();
-                setState(() => message = 'Gateway settings saved securely.');
+                setState(() => message = 'Access token saved securely.');
               } catch (error) {
                 setState(() => message = error.toString());
               }
             },
-            child: const Text('Save gateway'),
+            child: const Text('Save access token'),
           ),
           if (message != null)
             Text(
@@ -171,9 +154,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       final allowed = await GetIt.I<VoiceService>()
                           .requestBackgroundBatteryAccess();
                       if (!context.mounted) return;
-                      setState(() => message = allowed
-                          ? 'Screen-off battery access is enabled.'
-                          : 'Allow unrestricted battery use in Android settings for screen-off replies.');
+                      setState(
+                        () => message = allowed
+                            ? 'Screen-off battery access is enabled.'
+                            : 'Allow unrestricted battery use in Android settings for screen-off replies.',
+                      );
                     },
                     child: const Text('Allow screen-off conversations'),
                   ),
