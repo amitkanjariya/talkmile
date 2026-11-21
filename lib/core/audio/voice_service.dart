@@ -183,9 +183,7 @@ class VoiceService implements VoicePort {
   Future<String?> listen() async {
     if (_stopped) return null;
     if (_sessionActive) {
-      return _session.invokeMethod<String>('listen').timeout(
-        const Duration(seconds: 60),
-      );
+      return _session.invokeMethod<String>('listen');
     }
     if (_turn != null) throw StateError('A listening turn is already active.');
     _partial = '';

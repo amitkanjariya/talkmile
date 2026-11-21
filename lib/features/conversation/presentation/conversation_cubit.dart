@@ -81,10 +81,10 @@ class ConversationCubit extends Cubit<ConversationState> {
       });
       emit(
         state.copyWith(
-          voiceNotice: [notice, backgroundNotice]
-              .whereType<String>()
-              .where((text) => text.isNotEmpty)
-              .join(' '),
+          voiceNotice: [
+            notice,
+            backgroundNotice,
+          ].whereType<String>().where((text) => text.isNotEmpty).join(' '),
         ),
       );
       unawaited(_run(generation, topic: topic));
@@ -116,7 +116,6 @@ class ConversationCubit extends Cubit<ConversationState> {
               : topic == 'Continue previous story' && _storyState.isNotEmpty
               ? 'Continue the saved interactive story and ask what I do next.'
               : 'Start a speaking practice about $topic.');
-      var silentTurns = 0;
       while (generation == _generation && !isClosed) {
         emit(
           state.copyWith(
@@ -231,21 +230,14 @@ class ConversationCubit extends Cubit<ConversationState> {
           }
           if (generation != _generation) break;
           if (heard == null || heard.isEmpty) {
-            silentTurns++;
-            final prompt = silentTurns == 1
-                ? 'Take your time. I am listening whenever you are ready.'
-                : 'We can pause for a moment. Say anything when you are ready.';
             emit(
               state.copyWith(
-                phase: SessionPhase.speaking,
-                status: 'Waiting for your answer',
-                spokenText: prompt,
+                phase: SessionPhase.listening,
+                status: 'Still listening. Speak when you are ready.',
               ),
             );
-            await _speakUntilAvailable(prompt);
             continue;
           }
-          silentTurns = 0;
           final command = interpretVoiceCommand(heard);
           if (command != null) {
             final instruction = await _handleCommand(command);

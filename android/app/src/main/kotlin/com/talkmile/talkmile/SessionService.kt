@@ -27,8 +27,10 @@ class SessionService : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var pendingListenResult: MethodChannel.Result? = null
     private var partialTranscript = ""
+    private var recognitionAttempt = 0
+    private var restartCount = 0
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val listeningTimeout = Runnable { finishListening(partialTranscript) }
+    private var listeningTimeout: Runnable? = null
 
     companion object {
         const val ACTION_START = "com.talkmile.talkmile.START"
@@ -103,55 +105,101 @@ class SessionService : Service() {
         }
 
         partialTranscript = ""
+        restartCount = 0
         pendingListenResult = result
-        try {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(applicationContext).apply {
-                setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) = Unit
-                    override fun onBeginningOfSpeech() = Unit
-                    override fun onRmsChanged(rmsdB: Float) = Unit
-                    override fun onBufferReceived(buffer: ByteArray?) = Unit
-                    override fun onEndOfSpeech() = Unit
-
-                    override fun onError(error: Int) {
-                        if (error == SpeechRecognizer.ERROR_NO_MATCH ||
-                            error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                            finishListening(partialTranscript)
-                        } else {
-                            finishListening(errorCode = error)
-                        }
-                    }
-
-                    override fun onResults(results: Bundle?) {
-                        finishListening(bestTranscript(results).ifBlank { partialTranscript })
-                    }
-
-                    override fun onPartialResults(partialResults: Bundle?) {
-                        val latest = bestTranscript(partialResults)
-                        if (latest.isNotBlank()) partialTranscript = latest
-                    }
-
-                    override fun onEvent(eventType: Int, params: Bundle?) = Unit
-                })
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                }
-                startListening(intent)
-            }
-            mainHandler.postDelayed(listeningTimeout, 55_000L)
-        } catch (error: Exception) {
-            finishListening(errorCode = SpeechRecognizer.ERROR_CLIENT,
-                message = error.message ?: "Could not start speech recognition.")
-        }
+        startListeningAttempt()
     }
 
     fun recoverSpeechRecognizer() {
-        finishListening(errorCode = SpeechRecognizer.ERROR_CLIENT,
-            message = "Speech recognition is restarting.")
+        if (pendingListenResult != null) restartListening(0L)
+    }
+
+    private fun startListeningAttempt() {
+        if (pendingListenResult == null) return
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED) {
+            finishListening(errorCode = SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS,
+                message = "Microphone permission is required.")
+            return
+        }
+
+        val attempt = ++recognitionAttempt
+        try {
+            val recognizer = SpeechRecognizer.createSpeechRecognizer(applicationContext)
+            speechRecognizer = recognizer
+            recognizer.setRecognitionListener(object : RecognitionListener {
+                private fun isCurrent() = speechRecognizer === recognizer &&
+                    recognitionAttempt == attempt && pendingListenResult != null
+
+                override fun onReadyForSpeech(params: Bundle?) {
+                    if (isCurrent()) restartCount = 0
+                }
+                override fun onBeginningOfSpeech() = Unit
+                override fun onRmsChanged(rmsdB: Float) = Unit
+                override fun onBufferReceived(buffer: ByteArray?) = Unit
+                override fun onEndOfSpeech() = Unit
+
+                override fun onError(error: Int) {
+                    if (!isCurrent()) return
+                    if (partialTranscript.isNotBlank()) {
+                        finishListening(partialTranscript)
+                    } else {
+                        restartListening()
+                    }
+                }
+
+                override fun onResults(results: Bundle?) {
+                    if (!isCurrent()) return
+                    val transcript = bestTranscript(results).ifBlank { partialTranscript }
+                    if (transcript.isNotBlank()) finishListening(transcript)
+                    else restartListening()
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) {
+                    if (!isCurrent()) return
+                    val latest = bestTranscript(partialResults)
+                    if (latest.isNotBlank()) partialTranscript = latest
+                }
+
+                override fun onEvent(eventType: Int, params: Bundle?) = Unit
+            })
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            }
+            recognizer.startListening(intent)
+
+            val timeout = Runnable {
+                if (speechRecognizer !== recognizer || recognitionAttempt != attempt ||
+                    pendingListenResult == null) return@Runnable
+                if (partialTranscript.isNotBlank()) finishListening(partialTranscript)
+                else restartListening()
+            }
+            listeningTimeout = timeout
+            mainHandler.postDelayed(timeout, 55_000L)
+        } catch (_: Exception) {
+            restartListening()
+        }
+    }
+
+    private fun restartListening(delayMillis: Long? = null) {
+        if (pendingListenResult == null) return
+        listeningTimeout?.let(mainHandler::removeCallbacks)
+        listeningTimeout = null
+        recognitionAttempt++
+        val oldRecognizer = speechRecognizer
+        speechRecognizer = null
+        oldRecognizer?.cancel()
+        oldRecognizer?.destroy()
+
+        val delay = delayMillis ?: minOf(
+            500L * (1L shl minOf(restartCount++, 2)),
+            2_000L,
+        )
+        mainHandler.postDelayed({ startListeningAttempt() }, delay)
     }
 
     private fun bestTranscript(bundle: Bundle?): String =
@@ -165,7 +213,9 @@ class SessionService : Service() {
     ) {
         val result = pendingListenResult ?: return
         pendingListenResult = null
-        mainHandler.removeCallbacks(listeningTimeout)
+        listeningTimeout?.let(mainHandler::removeCallbacks)
+        listeningTimeout = null
+        recognitionAttempt++
         val recognizer = speechRecognizer
         speechRecognizer = null
         recognizer?.cancel()

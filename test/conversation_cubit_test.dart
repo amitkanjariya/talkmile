@@ -87,41 +87,41 @@ Future<void> until(bool Function() condition, {int attempts = 100}) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('silence prompts again and Stop releases the session', () async {
-    SharedPreferences.setMockInitialValues({});
-    FlutterSecureStorage.setMockInitialValues({});
-    final store = LocalStore(NativeDatabase.memory());
-    await store.open();
-    await store.setGatewayUrl('https://example.com/v1/reply');
-    await store.setGatewayToken('test-token');
-    final voice = FakeVoice();
-    final gateway = FakeGateway();
-    final cubit = ConversationCubit(
-      voice: voice,
-      gateway: gateway,
-      store: store,
-    );
+  test(
+    'silence does not speak prompts and Stop releases the session',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      FlutterSecureStorage.setMockInitialValues({});
+      final store = LocalStore(NativeDatabase.memory());
+      await store.open();
+      await store.setGatewayUrl('https://example.com/v1/reply');
+      await store.setGatewayToken('test-token');
+      final voice = FakeVoice();
+      final gateway = FakeGateway();
+      final cubit = ConversationCubit(
+        voice: voice,
+        gateway: gateway,
+        store: store,
+      );
 
-    expect(await cubit.start(), isTrue);
-    await until(() => cubit.state.phase == SessionPhase.listening);
-    expect(gateway.calls, 1);
-    expect(await cubit.start(), isFalse);
+      expect(await cubit.start(), isTrue);
+      await until(() => cubit.state.phase == SessionPhase.listening);
+      expect(gateway.calls, 1);
+      expect(await cubit.start(), isFalse);
 
-    voice.pending!.complete(null);
-    await until(
-      () =>
-          voice.spoken.length >= 2 &&
-          cubit.state.phase == SessionPhase.listening,
-    );
-    expect(voice.spoken.last, contains('Take your time'));
-    expect(cubit.state.phase, SessionPhase.listening);
+      final firstListen = voice.pending!;
+      firstListen.complete(null);
+      await until(() => voice.pending != firstListen);
+    expect(voice.spoken, ['Welcome. How was your day?']);
+      expect(cubit.state.phase, SessionPhase.listening);
 
-    await Future.wait([cubit.stop(), cubit.stop()]);
-    expect(cubit.state.phase, SessionPhase.stopped);
-    expect(voice.stops, 1);
-    await cubit.close();
-    await store.close();
-  });
+      await Future.wait([cubit.stop(), cubit.stop()]);
+      expect(cubit.state.phase, SessionPhase.stopped);
+      expect(voice.stops, 1);
+      await cubit.close();
+      await store.close();
+    },
+  );
 
   test('keeps a session alive through a temporary gateway failure', () async {
     SharedPreferences.setMockInitialValues({});
