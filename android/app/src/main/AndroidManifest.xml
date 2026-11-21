@@ -10,7 +10,7 @@
     <application
         android:label="TalkMile"
         android:name="${applicationName}"
-        android:icon="@drawable/ic_talkmile">
+        android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"
