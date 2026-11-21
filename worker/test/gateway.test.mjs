@@ -34,6 +34,23 @@ test('rejects missing authorization before calling Gemini', async () => {
   assert.equal(response.status, 401);
 });
 
+test('accepts a friend token while retaining the original token', async () => {
+  globalThis.fetch = async () => Response.json({candidates: [{content: {parts: [{text: JSON.stringify({
+    spokenText: 'Thanks for sharing.', nextQuestion: 'What happened next?',
+    corrections: [], storyState: '', chapterCompleted: false,
+    newVocabulary: [], difficulty: 'intermediate',
+  })}]}}]});
+  const envWithFriend = {...env, TALKMILE_ACCESS_TOKENS: 'friend-private-token, another-token'};
+
+  const ownerResponse = await gateway.fetch(request(validBody, 'private-token'), envWithFriend);
+  const friendResponse = await gateway.fetch(request(validBody, 'friend-private-token'), envWithFriend);
+  const unknownResponse = await gateway.fetch(request(validBody, 'unregistered-token'), envWithFriend);
+
+  assert.equal(ownerResponse.status, 200);
+  assert.equal(friendResponse.status, 200);
+  assert.equal(unknownResponse.status, 401);
+});
+
 test('rejects oversized or malformed payloads', async () => {
   const invalid = {...validBody, utterance: 'a'.repeat(2001)};
   assert.equal((await gateway.fetch(request(invalid), env)).status, 400);

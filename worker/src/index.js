@@ -197,14 +197,30 @@ async function hash(input) {
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+async function hasValidAccessToken(request, env) {
+  const bearer = request.headers.get('authorization') || '';
+  const tokens = [env.TALKMILE_ACCESS_TOKEN, env.TALKMILE_ACCESS_TOKENS]
+    .filter(Boolean)
+    .flatMap(value => String(value).split(/[\r\n,]/))
+    .map(token => token.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  if (tokens.length === 0) return false;
+
+  const presented = await hash(bearer);
+  let accepted = false;
+  for (const token of tokens) {
+    if (presented === await hash(`Bearer ${token}`)) accepted = true;
+  }
+  return accepted;
+}
+
 export default {
   async fetch(request, env) {
     if (request.method !== 'POST') return json({error: 'Method not allowed'}, 405);
     const path = new URL(request.url).pathname;
     if (!['/v1/reply', '/v1/vocabulary'].includes(path)) return json({error: 'Not found'}, 404);
-    const bearer = request.headers.get('authorization') || '';
-    if (!env.TALKMILE_ACCESS_TOKEN ||
-        await hash(bearer) !== await hash(`Bearer ${env.TALKMILE_ACCESS_TOKEN}`)) {
+    if (!await hasValidAccessToken(request, env)) {
       return json({error: 'Unauthorized'}, 401);
     }
   if (Number(request.headers.get('content-length') || 0) > 20000) {
