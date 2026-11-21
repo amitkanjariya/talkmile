@@ -91,6 +91,11 @@ class VoiceService implements VoicePort {
     }
     await _tts.awaitSpeakCompletion(true);
     await _tts.setLanguage('en-IN');
+    // Android/OnePlus can mute the Google TTS engine when TalkMile is in the
+    // background if speech uses ordinary media attributes. Treat companion
+    // replies as spoken navigation guidance so they remain audible while the
+    // screen is off and the conversation foreground service is active.
+    await _tts.setAudioAttributesForNavigation();
   }
 
   @override
