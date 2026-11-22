@@ -162,9 +162,7 @@ void main() {
     'shared quota exhaustion is visible, silent and does not end the session',
     () async {
       SharedPreferences.setMockInitialValues({});
-      FlutterSecureStorage.setMockInitialValues({
-        'gatewayToken': 'shared-code',
-      });
+      FlutterSecureStorage.setMockInitialValues({});
       final store = LocalStore(NativeDatabase.memory());
       await store.open();
       final voice = FakeVoice();

@@ -188,3 +188,20 @@ test('missing pool config and wrong access codes do not call Gemini', async () =
   assert.equal((await gateway.fetch(request(), {...baseEnv, GEMINI_API_KEY: '', GEMINI_API_KEY_2: ''})).status, 503);
   assert.equal((await gateway.fetch(request({authorization: 'Bearer wrong'}), baseEnv)).status, 401);
 });
+
+test('shared access works with no phone API key or access code', async () => {
+  let usedKey;
+  globalThis.fetch = async (_url, options) => { usedKey = options.headers['x-goog-api-key']; return success(); };
+  const response = await gateway.fetch(request({}), baseEnv);
+  assert.equal(response.status, 200);
+  assert.equal(usedKey, 'primary-secret');
+});
+
+test('a caller Gemini key uses only that key and cannot spill into the shared pool', async () => {
+  const usedKeys = [];
+  globalThis.fetch = async (_url, options) => { usedKeys.push(options.headers['x-goog-api-key']); return new Response('', {status: 429}); };
+  const response = await gateway.fetch(request({'x-gemini-api-key': 'private-person-key'}), baseEnv);
+  assert.equal(response.status, 429);
+  assert.equal((await response.json()).scope, 'personal');
+  assert.deepEqual(usedKeys, ['private-person-key']);
+});

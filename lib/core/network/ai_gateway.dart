@@ -44,8 +44,8 @@ class AiGateway implements AiGatewayPort {
   Future<List<DailyWord>> dailyWords(LocalStore store) async {
     final url = store.gatewayUrl;
     final headers = await store.gatewayHeaders();
-    if (url.isEmpty || headers.isEmpty) {
-      throw StateError('Set up AI access in Settings.');
+    if (url.isEmpty) {
+      throw StateError('The TalkMile AI service is unavailable.');
     }
     final now = DateTime.now();
     final date =
@@ -93,8 +93,8 @@ class AiGateway implements AiGatewayPort {
   }) async {
     final url = store.gatewayUrl;
     final headers = await store.gatewayHeaders();
-    if (url.isEmpty || headers.isEmpty) {
-      throw StateError('Set up AI access in Settings before starting.');
+    if (url.isEmpty) {
+      throw StateError('The TalkMile AI service is unavailable.');
     }
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
@@ -120,11 +120,6 @@ class AiGateway implements AiGatewayPort {
         if (CancelToken.isCancel(error)) rethrow;
         final code = error.response?.statusCode;
         if (code == 401) {
-          if (headers.containsKey('Authorization')) {
-            throw StateError(
-              'Shared AI access was rejected. Check your access code or contact the TalkMile owner.',
-            );
-          }
           throw StateError(
             'Gemini API key was rejected. Check your key in Settings.',
           );

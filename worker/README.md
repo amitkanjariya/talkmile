@@ -1,6 +1,6 @@
 # TalkMile gateway
 
-TalkMile supports shared access with a Worker-managed Gemini key pool, as well as personal Gemini keys. The Worker URL is fixed in the app. Provider keys stay in Worker secrets for shared access; the phone stores only its TalkMile access code in secure storage.
+TalkMile uses a Worker-managed Gemini key pool when the optional personal key field is blank. If a user enters a Gemini API key in Settings, requests use only that key. The Worker URL is fixed in the app. Provider keys for shared access stay in Worker secrets.
 
 ## Deploy
 
@@ -12,14 +12,13 @@ TalkMile supports shared access with a Worker-managed Gemini key pool, as well a
 
 ## Shared key pool
 
-In this directory, set the first key and an access code if they are not already configured:
+In this directory, set the first key if it is not already configured:
 
 ```powershell
 npx wrangler secret put GEMINI_API_KEY
-npx wrangler secret put TALKMILE_ACCESS_TOKEN
 ```
 
-Paste each value at Wrangler's hidden prompt. Keep `GEMINI_API_KEY` and the current access code when adding backups. Add each backup as a new secret:
+Paste each value at Wrangler's hidden prompt. Keep `GEMINI_API_KEY` when adding backups. Add each backup as a new secret:
 
 ```powershell
 npx wrangler secret put GEMINI_API_KEY_2
@@ -28,7 +27,7 @@ npx wrangler secret put GEMINI_API_KEY_3
 
 Continue with `_4`, `_5`, etc. The Worker reads the first 20 unique nonblank keys: `GEMINI_API_KEY` first, followed by numbered secrets in numeric order. Duplicate values are ignored. Do not put keys in `wrangler.toml`, Git, or the APK. `wrangler secret put` publishes the updated secret; once this Worker version is deployed, adding keys needs no code change or APK rebuild. In the Cloudflare dashboard, use **Workers & Pages → talkmile-gateway → Settings → Variables and Secrets**, add a **Secret** with the numbered name, and deploy that change.
 
-On the phone, open **Settings → AI access → TalkMile shared access** and enter the value of `TALKMILE_ACCESS_TOKEN` as the access code. You can also set `TALKMILE_ACCESS_TOKENS` to up to 20 comma/newline-separated access codes; this permits revoking a friend's code separately. These codes authorize shared usage and should be treated as passwords. No provider key is sent to the app.
+On the phone, leave the optional Gemini API key field blank to use the shared pool. The shared endpoint does not require a user-specific access code. This makes the Worker endpoint public; the Worker global daily cap is the main usage guardrail, so monitor it and increase protection with per-user authentication if the app is shared widely.
 
 Both `/v1/reply` and `/v1/vocabulary` try the next key after a Gemini **429** or the current key's local daily cap. The full conversation payload stays identical and each key is tried at most once per request, under one 28-second timeout. Successful requests, invalid credentials, malformed output, network failures and other provider errors do not trigger key rotation. If every key is exhausted, the Worker returns HTTP 429 with `code: AI_QUOTA_EXHAUSTED`, `scope: shared`, a clear limit message and `Retry-After`.
 
@@ -38,9 +37,9 @@ Adding keys does not change `GEMINI_MODEL` or create unlimited quota. Google enf
 
 ## Personal keys and older apps
 
-**Settings → AI access → My Gemini API key** uses the caller's key over HTTPS in `X-Gemini-API-Key`. It is saved in device secure storage, never logged or persisted as plaintext by the Worker. An unrelated personal key has no access to the owner's fallback pool, even when its own quota runs out. Existing installs keep their saved personal key selected. Older saved TalkMile access codes remain supported.
+The optional Gemini key field uses the caller's key over HTTPS in `X-Gemini-API-Key`. It is saved in device secure storage, never logged or persisted as plaintext by the Worker. That request uses only the supplied key; on quota exhaustion the Worker does not fall back to the shared pool. Leave the field blank to use the shared key pool. Older app versions with saved TalkMile access codes remain supported.
 
-For compatibility, an app already presenting a key that matches one of the configured Worker keys can use the shared pool immediately. Prefer access codes for friends so they do not need your Gemini keys. Removing a provider key from the pool also removes this compatibility access for that key.
+For compatibility, an app already presenting a key that matches one of the configured Worker keys can use the shared pool immediately. Removing a provider key from the pool also removes this compatibility access for that key.
 
 ## Usage and hosting limits
 

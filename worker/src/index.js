@@ -196,12 +196,13 @@ export default {
     const suppliedGeminiKey = (request.headers.get('x-gemini-api-key') || '').trim();
     const keys = configuredKeys(env);
     const tokenAuthorized = await hasValidAccessToken(request, env);
-    // Existing apps already using an owner-configured key get pool failover too.
-    // An unrelated BYOK caller must never spend the owner's fallback quota.
-    const shared = tokenAuthorized || (!!suppliedGeminiKey && keys.includes(suppliedGeminiKey));
-    if (!suppliedGeminiKey && !tokenAuthorized) {
+    const hasBearer = (request.headers.get('authorization') || '').trim().length > 0;
+    // No user key means shared access. Legacy owner tokens continue working;
+    // a supplied personal key can never fall back to the owner's pool.
+    if (!suppliedGeminiKey && hasBearer && !tokenAuthorized) {
       return json({error: 'Unauthorized'}, 401);
     }
+    const shared = !suppliedGeminiKey || tokenAuthorized || keys.includes(suppliedGeminiKey);
     const credentials = {shared, keys: shared ? keys : [suppliedGeminiKey]};
     if (Number(request.headers.get('content-length') || 0) > 20000) {
       return json({error: 'Request too large'}, 413);

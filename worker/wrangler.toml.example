@@ -5,7 +5,7 @@ compatibility_date = "2026-10-01"
 # Choose a model currently supported by your Gemini API project and set
 # GEMINI_MODEL as a Worker environment variable.
 # Shared access: set GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3, etc.
-# and TALKMILE_ACCESS_TOKEN using `wrangler secret put`. Numbered backups are
+# using `wrangler secret put`. Numbered backups are
 # tried after quota failures; adding a secret does not require an APK rebuild.
 # Personal-key mode still passes the user's own key per request.
 # Never put secret values in this file or the Flutter application.

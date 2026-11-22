@@ -19,7 +19,7 @@ TalkMile is an Android-first Flutter application for spoken English practice. It
 1. Install Flutter 3.41.2 or a compatible stable release, Android SDK, and an Android device with a speech recognition service and TTS engine.
 2. Run `flutter pub get` and `flutter run` from this directory.
 3. Deploy the Worker using the instructions in [worker/README.md](worker/README.md). Choose a Gemini model available to the users' AI Studio projects.
-4. In TalkMile Settings, choose **AI access → TalkMile shared access** and enter the owner's access code, or choose **My Gemini API key** to use a personal key. Existing personal keys stay selected after updating. The Worker address is fixed in the app. Google project quotas and billing apply.
+4. Gemini API key is optional in TalkMile Settings. Leave it empty to use the shared Worker key pool. If a user enters their own key, TalkMile sends that user's requests with only that key. The Worker address is fixed in the app. Google project quotas and billing apply.
 5. Choose a companion, allow microphone access while the app is visible, approve Android's unrestricted battery-use prompt for screen-off conversations, and start a conversation while safely parked. On OnePlus, also enable **Allow background activity** under TalkMile's app battery settings if screen-off replies still pause.
 
 ## Build an installable release

@@ -27,7 +27,6 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final state = context.watch<SettingsCubit>().state;
     final cubit = context.read<SettingsCubit>();
-    final sharedAccess = state.aiAccessMode == 'shared';
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -87,32 +86,8 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 28),
           const SectionLabel('AI access'),
           const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            key: ValueKey(state.aiAccessMode),
-            initialValue: state.aiAccessMode,
-            decoration: const InputDecoration(labelText: 'Use'),
-            items: const [
-              DropdownMenuItem(
-                value: 'shared',
-                child: Text('TalkMile shared access'),
-              ),
-              DropdownMenuItem(
-                value: 'personal',
-                child: Text('My Gemini API key'),
-              ),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-              apiKey.clear();
-              setState(() => message = null);
-              cubit.chooseAiAccessMode(value);
-            },
-          ),
-          const SizedBox(height: 12),
           Text(
-            sharedAccess
-                ? 'Enter the access code from TalkMile\'s owner. Backup keys switch automatically when a limit is reached.'
-                : 'Your key is stored securely and sent to Gemini through TalkMile. Google project quotas and billing apply.',
+            'Optional. Leave blank to use TalkMile shared access. Your key, if added, is used only for your requests. Google project quotas and billing apply.',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               height: 1.5,
@@ -125,13 +100,9 @@ class _SettingsPageState extends State<SettingsPage> {
             autocorrect: false,
             enableSuggestions: false,
             decoration: InputDecoration(
-              labelText: sharedAccess
-                  ? (state.sharedAccessConfigured
-                        ? 'Replace access code'
-                        : 'Access code')
-                  : state.geminiKeyConfigured
+              labelText: state.geminiKeyConfigured
                   ? 'Replace Gemini API key'
-                  : 'Gemini API key',
+                  : 'Gemini API key (optional)',
               border: const OutlineInputBorder(),
             ),
           ),
@@ -139,17 +110,14 @@ class _SettingsPageState extends State<SettingsPage> {
           OutlinedButton(
             onPressed: () async {
               try {
-                if (sharedAccess) {
-                  await cubit.configureSharedAccess(apiKey.text);
-                } else {
-                  await cubit.configureGeminiKey(apiKey.text);
-                }
+                await cubit.configureGeminiKey(apiKey.text);
                 if (!mounted) return;
+                final usingShared = apiKey.text.trim().isEmpty;
                 apiKey.clear();
                 setState(
-                  () => message = sharedAccess
-                      ? 'Access code saved on this device.'
-                      : 'Gemini API key saved on this device.',
+                  () => message = usingShared
+                      ? 'Using TalkMile shared access.'
+                      : 'Your Gemini API key was saved on this device.',
                 );
               } catch (error) {
                 if (!mounted) return;
@@ -157,7 +125,9 @@ class _SettingsPageState extends State<SettingsPage> {
               }
             },
             child: Text(
-              sharedAccess ? 'Save access code' : 'Save Gemini API key',
+              state.geminiKeyConfigured
+                  ? 'Update Gemini API key'
+                  : 'Save Gemini API key',
             ),
           ),
           if (message != null)

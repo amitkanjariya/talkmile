@@ -12,7 +12,7 @@ void main() {
   late Dio dio;
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
-    FlutterSecureStorage.setMockInitialValues({'gatewayToken': 'shared-code'});
+    FlutterSecureStorage.setMockInitialValues({});
     store = LocalStore(NativeDatabase.memory());
     await store.open();
     dio = Dio();
@@ -36,14 +36,12 @@ void main() {
   }
 
   test(
-    'shared reply sends only the access code and keeps conversation context',
+    'shared reply sends no key or access code and keeps conversation context',
     () async {
-      await store.setGeminiApiKey('unused-personal-key');
-      await store.setAiAccessMode('shared');
       dio.interceptors.add(
         InterceptorsWrapper(
           onRequest: (options, handler) {
-            expect(options.headers['Authorization'], 'Bearer shared-code');
+            expect(options.headers['Authorization'], isNull);
             expect(options.headers['X-Gemini-API-Key'], isNull);
             expect(options.data['utterance'], 'Hello.');
             expect(options.data['geminiApiKey'], isNull);
@@ -76,7 +74,7 @@ void main() {
         InterceptorsWrapper(
           onRequest: (options, handler) {
             expect(options.path, endsWith('/v1/vocabulary'));
-            expect(options.headers['Authorization'], 'Bearer shared-code');
+            expect(options.headers['Authorization'], isNull);
             expect(options.headers['X-Gemini-API-Key'], isNull);
             handler.resolve(
               Response(
@@ -173,7 +171,6 @@ void main() {
 
   test('personal keys still use only their own credential header', () async {
     await store.setGeminiApiKey('personal-key');
-    await store.setAiAccessMode('personal');
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {

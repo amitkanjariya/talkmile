@@ -44,11 +44,11 @@ class ConversationCubit extends Cubit<ConversationState> {
 
   Future<bool> start({String? topic}) async {
     if (active) return false;
-    if (store.gatewayUrl.isEmpty || (await store.gatewayHeaders()).isEmpty) {
+    if (store.gatewayUrl.isEmpty) {
       emit(
         state.copyWith(
           phase: SessionPhase.error,
-          status: 'Set up AI access in Settings to start.',
+          status: 'The TalkMile AI service is unavailable.',
         ),
       );
       return false;
