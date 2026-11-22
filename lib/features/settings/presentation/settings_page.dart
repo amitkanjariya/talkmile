@@ -35,8 +35,6 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
         children: [
-          const BrandMark(size: 27),
-          const SizedBox(height: 30),
           const SectionLabel('Conversation'),
           const SizedBox(height: 14),
           _choice('Speaking partner', state.companion, [
@@ -73,21 +71,18 @@ class _SettingsPageState extends State<SettingsPage> {
             cubit.changeCorrections,
           ),
           const SizedBox(height: 14),
-          Text(
-            'Speaking speed: ${(state.speechRate * 100).round()}%',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('Voice speed', style: Theme.of(context).textTheme.titleMedium),
           Slider(
             value: state.speechRate,
-            min: .3,
-            max: .6,
+            min: .4,
+            max: .8,
             onChanged: cubit.changeRate,
           ),
           const SizedBox(height: 28),
           const SectionLabel('AI access'),
           const SizedBox(height: 12),
           Text(
-            'Optional. Leave blank to use TalkMile shared access. Your key, if added, is used only for your requests. Google project quotas and billing apply.',
+            'Optional · blank uses TalkMile shared keys.',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               height: 1.5,
@@ -124,11 +119,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 setState(() => message = error.toString());
               }
             },
-            child: Text(
-              state.geminiKeyConfigured
-                  ? 'Update Gemini API key'
-                  : 'Save Gemini API key',
-            ),
+            child: const Text('Save'),
           ),
           if (message != null)
             Text(
@@ -136,7 +127,7 @@ class _SettingsPageState extends State<SettingsPage> {
               style: TextStyle(color: Theme.of(context).colorScheme.primary),
             ),
           const SizedBox(height: 26),
-          const SectionLabel('Privacy'),
+          const SectionLabel('Permissions'),
           const SizedBox(height: 12),
           FutureBuilder<Map<String, bool>>(
             future: GetIt.I<VoiceService>().permissionStatus(),
@@ -144,7 +135,7 @@ class _SettingsPageState extends State<SettingsPage> {
               final status = snapshot.data;
               if (status == null) {
                 return Text(
-                  'Checking microphone and notification permissions…',
+                  'Checking…',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -160,7 +151,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     'Notifications: ${status['notification'] == true ? 'Allowed' : 'Not allowed'}',
                   ),
                   Text(
-                    'Screen-off access: ${status['batteryOptimization'] == true ? 'Allowed' : 'Needs permission'}',
+                    'Background audio: ${status['batteryOptimization'] == true ? 'Allowed' : 'Needs access'}',
                   ),
                   TextButton(
                     onPressed: () async {
@@ -170,10 +161,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       setState(
                         () => message = allowed
                             ? 'Screen-off battery access is enabled.'
-                            : 'Allow unrestricted battery use in Android settings for screen-off replies.',
+                            : 'Allow background audio in Android settings.',
                       );
                     },
-                    child: const Text('Allow screen-off conversations'),
+                    child: const Text('Background audio access'),
                   ),
                   TextButton(
                     onPressed: GetIt.I<VoiceService>().openAppSettings,
@@ -184,13 +175,6 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
           const SizedBox(height: 12),
-          Text(
-            'Speech recognition is provided by your Android speech engine. It may send audio to its provider. TalkMile does not store raw audio.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              height: 1.5,
-            ),
-          ),
           const SizedBox(height: 15),
           OutlinedButton(
             onPressed: () async {
@@ -199,7 +183,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 builder: (context) => AlertDialog(
                   title: const Text('Delete learning data?'),
                   content: const Text(
-                    'This removes your local practice totals and saved story.',
+                    'Delete practice totals and saved story?',
                   ),
                   actions: [
                     TextButton(

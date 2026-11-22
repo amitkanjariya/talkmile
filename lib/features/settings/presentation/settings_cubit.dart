@@ -5,7 +5,7 @@ class SettingsState {
   const SettingsState({
     this.ready = false,
     this.companion = 'mira',
-    this.speechRate = .48,
+    this.speechRate = .62,
     this.difficulty = 'intermediate',
     this.mode = 'conversation',
     this.correctionFrequency = 'gentle',

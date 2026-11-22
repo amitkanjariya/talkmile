@@ -1,30 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
-import 'package:talkmile/core/data/local_store.dart';
 import 'package:talkmile/core/theme/app_theme.dart';
 import 'package:talkmile/features/companion/presentation/companion_page.dart';
 import 'package:talkmile/features/conversation/presentation/conversation_page.dart';
 import 'package:talkmile/features/home/presentation/home_page.dart';
 import 'package:talkmile/features/home/presentation/practice_library_page.dart';
-import 'package:talkmile/features/onboarding/presentation/onboarding_page.dart';
 import 'package:talkmile/features/progress/presentation/progress_page.dart';
 import 'package:talkmile/features/settings/presentation/settings_page.dart';
 import 'package:talkmile/features/settings/presentation/settings_cubit.dart';
 
 final router = GoRouter(
   initialLocation: '/',
-  redirect: (_, state) {
-    if (!GetIt.I<LocalStore>().onboarded &&
-        state.matchedLocation != '/welcome') {
-      return '/welcome';
-    }
-    return null;
-  },
   routes: [
     GoRoute(path: '/', builder: (_, _) => const HomePage()),
-    GoRoute(path: '/welcome', builder: (_, _) => const OnboardingPage()),
     GoRoute(path: '/companion', builder: (_, _) => const CompanionPage()),
     GoRoute(path: '/conversation', builder: (_, _) => const ConversationPage()),
     GoRoute(path: '/progress', builder: (_, _) => const ProgressPage()),

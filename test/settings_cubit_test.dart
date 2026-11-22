@@ -13,16 +13,20 @@ void main() {
     () async {
       SharedPreferences.setMockInitialValues({
         'gatewayUrl': 'https://old.example',
+        'speechRate': .48,
       });
       FlutterSecureStorage.setMockInitialValues({});
       final store = LocalStore(NativeDatabase.memory());
       await store.open();
       final cubit = SettingsCubit(store);
       await cubit.load();
+      expect(cubit.state.speechRate, .62);
 
       expect(cubit.state.geminiKeyConfigured, isFalse);
       expect(await store.gatewayHeaders(), isEmpty);
       expect(store.gatewayUrl, LocalStore.fixedGatewayUrl);
+      await cubit.changeRate(.42);
+      expect(store.speechRate, .42);
       await cubit.configureGeminiKey('');
       expect(cubit.state.geminiKeyConfigured, isFalse);
       expect(await store.gatewayHeaders(), isEmpty);

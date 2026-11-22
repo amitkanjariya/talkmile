@@ -183,7 +183,7 @@ class VoiceService implements VoicePort {
   }
 
   @override
-  Future<void> speak(String text, {double rate = .48}) async {
+  Future<void> speak(String text, {double rate = .62}) async {
     if (_stopped) return;
     if (_sessionActive) {
       await _session.invokeMethod<void>('speak', {

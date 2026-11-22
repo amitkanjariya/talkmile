@@ -28,51 +28,22 @@ class ProgressPage extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const BrandMark(size: 27),
-            const SizedBox(height: 42),
-            const SectionLabel('Every word counts'),
-            const SizedBox(height: 12),
             Text(
               progress.seconds == 0
-                  ? 'Your journey starts here.'
-                  : '${(progress.seconds / 60).round()} minutes of practice',
+                  ? '0 minutes'
+                  : '${(progress.seconds / 60).round()} minutes',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 25),
-            _stat(
-              context,
-              'Speaking turns',
-              '${progress.turns}',
-              Icons.record_voice_over_outlined,
-            ),
-            _stat(
-              context,
-              'Practice days',
-              '${progress.days}',
-              Icons.calendar_month_outlined,
-            ),
-            _stat(
-              context,
-              'Story chapters',
-              '${progress.chapters}',
-              Icons.menu_book_outlined,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              progress.seconds == 0
-                  ? 'Start a conversation to see real activity here.'
-                  : 'Keep returning for short conversations. Your time and turns are counted from actual sessions.',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                height: 1.5,
-              ),
-            ),
+            _stat(context, 'Turns', '${progress.turns}'),
+            _stat(context, 'Days', '${progress.days}'),
+            _stat(context, 'Story chapters', '${progress.chapters}'),
             const SizedBox(height: 18),
-            const SectionLabel('Practised vocabulary'),
+            const SectionLabel('Vocabulary'),
             const SizedBox(height: 12),
             if (insights.vocabulary.isEmpty)
               Text(
-                'Words introduced in conversation will appear here.',
+                'No words yet',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -87,11 +58,11 @@ class ProgressPage extends StatelessWidget {
                 ],
               ),
             const SizedBox(height: 24),
-            const SectionLabel('Grammar improvements'),
+            const SectionLabel('Corrections'),
             const SizedBox(height: 12),
             if (insights.corrections.isEmpty)
               Text(
-                'Helpful corrections will appear after meaningful mistakes.',
+                'No corrections yet',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -104,36 +75,17 @@ class ProgressPage extends StatelessWidget {
                     child: Text(correction),
                   ),
                 ),
-            if (insights.corrections.isNotEmpty) ...[
-              const SizedBox(height: 24),
-              const SectionLabel('Try next'),
-              const SizedBox(height: 10),
-              Text(
-                'Use “${insights.corrections.first}” in your next conversation.',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  height: 1.5,
-                ),
-              ),
-            ],
           ],
         );
       },
     ),
   );
 
-  Widget _stat(
-    BuildContext context,
-    String label,
-    String value,
-    IconData icon,
-  ) => Card(
+  Widget _stat(BuildContext context, String label, String value) => Card(
     child: Padding(
       padding: const EdgeInsets.all(20),
       child: Row(
         children: [
-          Icon(icon, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 16),
           Expanded(child: Text(label)),
           Text(value, style: Theme.of(context).textTheme.titleLarge),
         ],

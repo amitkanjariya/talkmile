@@ -41,7 +41,7 @@ class HomePage extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 38),
+            const SizedBox(height: 32),
             Text(greeting, style: theme.textTheme.bodyLarge),
             const SizedBox(height: 5),
             Text('Let’s talk.', style: theme.textTheme.displayLarge),
@@ -49,11 +49,6 @@ class HomePage extends StatelessWidget {
             FilledButton(
               onPressed: () => _start(context),
               child: const Text('Start speaking'),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '$coachName is ready. Use TalkMile while safely parked.',
-              style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 28),
             _SectionHeading(
@@ -64,29 +59,19 @@ class HomePage extends StatelessWidget {
               ),
             ),
             _HomeCard(
-              title: '10 words for everyday English',
-              subtitle: 'Learn a few, then use them in a conversation.',
+              title: '10 words for today',
               onTap: () => context.push('/vocabulary'),
             ),
             const SizedBox(height: 24),
             _SectionHeading(
-              title: 'Choose a conversation',
+              title: 'Topics',
               action: TextButton(
                 onPressed: () => context.push('/topics'),
-                child: const Text('All topics'),
+                child: const Text('See all'),
               ),
             ),
-            _HomeCard(
-              title: 'Everyday topics',
-              subtitle: 'Work, travel, family, and more.',
-              onTap: () => context.push('/topics'),
-            ),
             const SizedBox(height: 11),
-            _HomeCard(
-              title: 'Stories',
-              subtitle: 'Choose a genre and shape what happens.',
-              onTap: () => context.push('/stories'),
-            ),
+            _HomeCard(title: 'Stories', onTap: () => context.push('/stories')),
             FutureBuilder<Map<String, dynamic>?>(
               future: GetIt.I<LocalStore>().readStory(),
               builder: (context, snapshot) {
@@ -99,9 +84,7 @@ class HomePage extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 10),
                   child: _HomeCard(
                     title: 'Continue your story',
-                    subtitle:
-                        saved['topic'] as String? ??
-                        'Pick up where you left off.',
+                    subtitle: saved['topic'] as String? ?? '',
                     onTap: () => _start(context, 'Continue previous story'),
                   ),
                 );
@@ -109,7 +92,7 @@ class HomePage extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             _SectionHeading(
-              title: 'Your speaking partner',
+              title: 'Speaking partner',
               action: TextButton(
                 onPressed: () => context.push('/companion'),
                 child: const Text('Choose'),
@@ -117,7 +100,6 @@ class HomePage extends StatelessWidget {
             ),
             _HomeCard(
               title: coachName,
-              subtitle: 'Change partner, voice, or conversation style.',
               onTap: () => context.push('/companion'),
             ),
             const SizedBox(height: 24),
@@ -166,7 +148,7 @@ class _SectionHeading extends StatelessWidget {
 class _HomeCard extends StatelessWidget {
   const _HomeCard({
     required this.title,
-    required this.subtitle,
+    this.subtitle = '',
     required this.onTap,
   });
   final String title;
@@ -184,8 +166,10 @@ class _HomeCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 3),
-            Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+            if (subtitle.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+            ],
           ],
         ),
       ),

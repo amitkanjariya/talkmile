@@ -356,7 +356,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         await _speakUntilAvailable(_lastSpeech);
         return '';
       case VoiceCommand.slower:
-        await store.setSpeechRate((store.speechRate - .08).clamp(.3, .55));
+        await store.setSpeechRate((store.speechRate - .08).clamp(.4, .75));
         await _speakUntilAvailable('I will speak more slowly.');
         return '';
       case VoiceCommand.male:

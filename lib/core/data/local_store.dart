@@ -39,11 +39,16 @@ class LocalStore extends GeneratedDatabase {
   Future<void> open() async {
     _preferences = await SharedPreferences.getInstance();
     await _preferences.remove('gatewayUrl');
+    if (_preferences.getBool('speechSpeedImproved') != true) {
+      final saved = _preferences.getDouble('speechRate');
+      if (saved == null || saved <= .48) {
+        await _preferences.setDouble('speechRate', .62);
+      }
+      await _preferences.setBool('speechSpeedImproved', true);
+    }
     await customSelect('SELECT 1').get();
   }
 
-  bool get onboarded => _preferences.getBool('onboarded') ?? false;
-  Future<void> setOnboarded() => _preferences.setBool('onboarded', true);
   String get companion {
     final value = _preferences.getString('companion') ?? 'mira';
     return value == 'female'
@@ -55,7 +60,8 @@ class LocalStore extends GeneratedDatabase {
 
   Future<void> setCompanion(String value) =>
       _preferences.setString('companion', value);
-  double get speechRate => _preferences.getDouble('speechRate') ?? .48;
+  double get speechRate => _preferences.getDouble('speechRate') ?? .62;
+
   Future<void> setSpeechRate(double value) =>
       _preferences.setDouble('speechRate', value);
   String get difficulty =>
