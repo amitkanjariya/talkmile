@@ -11,6 +11,8 @@ class SettingsState {
     this.correctionFrequency = 'gentle',
     this.themeMode = 'system',
     this.geminiKeyConfigured = false,
+    this.sharedAccessConfigured = false,
+    this.aiAccessMode = 'shared',
   });
   final bool ready;
   final String companion;
@@ -20,6 +22,8 @@ class SettingsState {
   final String correctionFrequency;
   final String themeMode;
   final bool geminiKeyConfigured;
+  final bool sharedAccessConfigured;
+  final String aiAccessMode;
 }
 
 class SettingsCubit extends Cubit<SettingsState> {
@@ -36,6 +40,8 @@ class SettingsCubit extends Cubit<SettingsState> {
       correctionFrequency: store.correctionFrequency,
       themeMode: store.themeMode,
       geminiKeyConfigured: (await store.getGeminiApiKey()).isNotEmpty,
+      sharedAccessConfigured: (await store.getGatewayToken()).isNotEmpty,
+      aiAccessMode: await store.getAiAccessMode(),
     ),
   );
 
@@ -78,6 +84,23 @@ class SettingsCubit extends Cubit<SettingsState> {
       throw const FormatException('That Gemini API key does not look valid.');
     }
     await store.setGeminiApiKey(key);
+    await store.setAiAccessMode('personal');
+    await load();
+  }
+
+  Future<void> chooseAiAccessMode(String mode) async {
+    if (!['shared', 'personal'].contains(mode)) return;
+    await store.setAiAccessMode(mode);
+    await load();
+  }
+
+  Future<void> configureSharedAccess(String value) async {
+    final token = value.trim();
+    if (token.isEmpty || token.length > 256 || token.contains(RegExp(r'\s'))) {
+      throw const FormatException('Enter a valid TalkMile access code.');
+    }
+    await store.setGatewayToken(token);
+    await store.setAiAccessMode('shared');
     await load();
   }
 }

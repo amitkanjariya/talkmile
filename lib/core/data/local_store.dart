@@ -148,6 +148,24 @@ class LocalStore extends GeneratedDatabase {
       await _secure.read(key: 'geminiApiKey') ?? '';
   Future<void> setGeminiApiKey(String value) =>
       _secure.write(key: 'geminiApiKey', value: value);
+  Future<String> getGatewayToken() async =>
+      await _secure.read(key: 'gatewayToken') ?? '';
+  Future<void> setGatewayToken(String value) =>
+      _secure.write(key: 'gatewayToken', value: value);
+  Future<String> getAiAccessMode() async =>
+      _preferences.getString('aiAccessMode') ??
+      ((await getGeminiApiKey()).isNotEmpty ? 'personal' : 'shared');
+  Future<void> setAiAccessMode(String value) =>
+      _preferences.setString('aiAccessMode', value);
+
+  Future<Map<String, String>> gatewayHeaders() async {
+    if (await getAiAccessMode() == 'shared') {
+      final token = await getGatewayToken();
+      return token.isEmpty ? {} : {'Authorization': 'Bearer $token'};
+    }
+    final key = await getGeminiApiKey();
+    return key.isEmpty ? {} : {'X-Gemini-API-Key': key};
+  }
 
   Future<Map<String, dynamic>?> readStory() async {
     final raw = await _secure.read(key: 'storyState');

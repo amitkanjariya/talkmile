@@ -12,14 +12,14 @@ TalkMile is an Android-first Flutter application for spoken English practice. It
 - Runtime discovery of installed English TTS voices, preferring `en-IN` and then another installed English voice. Android does not provide a reliable voice-gender field, so partner selection uses voice-name hints and reports its actual fallback.
 - Aggregate practice counts in Drift/SQLite; short story context, learned vocabulary, corrections, and each user's Gemini key in Android-backed secure storage. Raw audio is never stored by TalkMile.
 - A visible microphone/media foreground service with a partial wake lock and retry-until-stopped session behavior; locked-screen recognition still depends on the Android speech engine.
-- A Cloudflare Worker gateway that forwards each user's Gemini key, validates payloads, and applies configurable best-effort quotas. Legacy token-based installations remain supported.
+- A Cloudflare Worker gateway with shared Gemini key failover on quota limits, personal-key support, payload validation, and configurable best-effort quotas. Add numbered Worker secrets without rebuilding the app.
 
 ## Setup
 
 1. Install Flutter 3.41.2 or a compatible stable release, Android SDK, and an Android device with a speech recognition service and TTS engine.
 2. Run `flutter pub get` and `flutter run` from this directory.
 3. Deploy the Worker using the instructions in [worker/README.md](worker/README.md). Choose a Gemini model available to the users' AI Studio projects.
-4. In TalkMile Settings, enter your own Gemini API key. The Worker address is fixed in the app. Google project quotas and billing apply.
+4. In TalkMile Settings, choose **AI access → TalkMile shared access** and enter the owner's access code, or choose **My Gemini API key** to use a personal key. Existing personal keys stay selected after updating. The Worker address is fixed in the app. Google project quotas and billing apply.
 5. Choose a companion, allow microphone access while the app is visible, approve Android's unrestricted battery-use prompt for screen-off conversations, and start a conversation while safely parked. On OnePlus, also enable **Allow background activity** under TalkMile's app battery settings if screen-off replies still pause.
 
 ## Build an installable release
@@ -32,7 +32,7 @@ Other machines can set `TALKMILE_SIGNING_PROPERTIES` to an external properties f
 
 The first signed release cannot update an older debug-signed installation. If Android reports a signature conflict, remove that development install before installing the release; uninstalling deletes its local practice data and saved API key. Fresh installs have no such conflict. A successful build alone is not an installation test.
 
-For public use, account for the shared Worker's quotas too. The current KV counter implementation uses two writes per uncached Gemini request and is not an atomic limiter. KV's same-key write limit affects the shared global counter. Review [Worker setup and limits](worker/README.md) before scaling to many simultaneous users.
+For public use, account for the shared Worker's quotas too. The current KV counter implementation uses two writes per normal uncached request, with additional writes on quota failover, and is not an atomic limiter. KV's same-key write limit affects the shared global counter. Adding Gemini keys does not increase Cloudflare's quotas. Review [Worker setup and limits](worker/README.md) before scaling to many simultaneous users.
 
 ## Architecture and implementation order
 

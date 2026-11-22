@@ -4,9 +4,11 @@ compatibility_date = "2026-10-01"
 
 # Choose a model currently supported by your Gemini API project and set
 # GEMINI_MODEL as a Worker environment variable.
-# New app versions pass each user's Gemini key per request. GEMINI_API_KEY and
-# TALKMILE_ACCESS_TOKEN remain optional for older app versions. Never put secret
-# values in this file or the Flutter application.
+# Shared access: set GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3, etc.
+# and TALKMILE_ACCESS_TOKEN using `wrangler secret put`. Numbered backups are
+# tried after quota failures; adding a secret does not require an APK rebuild.
+# Personal-key mode still passes the user's own key per request.
+# Never put secret values in this file or the Flutter application.
 # DAILY_REQUEST_LIMIT defaults to 450 per Gemini key; the global daily cap
 # defaults to 45000. Both KV limits are best-effort, not strict atomic limits.
 

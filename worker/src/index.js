@@ -1,3 +1,5 @@
+import {configuredKeys, generateContent, hash, json} from './gemini.js';
+
 const PROMPT_VERSION = 'talkmile-coach-v5';
 const SYSTEM_PROMPT = `You are TalkMile, a patient Indian English speaking partner and practical coach.
 Speak only English. Be natural, warm and concise. Keep normal replies to about 25-40 spoken words,
@@ -104,14 +106,6 @@ function cleanCorrections(value) {
     validText(item.explanation, 180) && item.explanation.trim()).slice(0, 12);
 }
 
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store'},
-  });
-}
-
 function validText(value, limit) {
   return typeof value === 'string' && value.length <= limit;
 }
@@ -146,33 +140,24 @@ const vocabularySchema = {
   required: ['words'],
 };
 
-async function dailyVocabulary(body, env, geminiApiKey) {
+async function dailyVocabulary(body, env, credentials) {
   if (!body || !/^\d{4}-\d{2}-\d{2}$/.test(body.date) ||
       !['beginner', 'intermediate', 'advanced'].includes(body.difficulty)) {
     return json({error: 'Invalid request'}, 400);
   }
   const cacheKey = `daily-words:v2:${body.date}:${body.difficulty}`;
-  if (env.USAGE) {
-    const cached = await env.USAGE.get(cacheKey);
-    if (cached) return json(JSON.parse(cached));
-  }
-  if (!geminiApiKey || !env.GEMINI_MODEL) return json({error: 'Gemini API key or model is unavailable'}, 503);
-  if (!await consumeDailyQuota(geminiApiKey, env)) return json({error: 'TalkMile daily request limit reached for this key'}, 429);
-  const model = encodeURIComponent(env.GEMINI_MODEL);
   try {
-    const upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: {'content-type': 'application/json', 'x-goog-api-key': geminiApiKey},
-      body: JSON.stringify({
-        systemInstruction: {parts: [{text: 'Create exactly ten useful, slightly challenging English words and expressions for adult everyday spoken conversation. Target CEFR B1-B2: clearly more useful and nuanced than basic A1-A2 words, while still common in real life. Prefer practical phrasal verbs, collocations, and precise everyday adjectives or verbs (for example: sort out, overwhelmed, postpone, reassure, worthwhile). Avoid academic, rare, or formal words. Include a short plain-English meaning and a natural spoken example for each. Choose distinct items and avoid words likely to repeat on adjacent dates. For beginner level, choose accessible B1 stretch vocabulary rather than basic words.'}]},
-        contents: [{role: 'user', parts: [{text: `Create the daily set for ${body.date}. Learner setting: ${body.difficulty}, but keep the words useful B1-B2 stretch vocabulary. Return exactly ten distinct items.`}]}],
-        generationConfig: {responseMimeType: 'application/json', responseSchema: vocabularySchema, temperature: 0.8, maxOutputTokens: 1100},
-      }),
+    if (env.USAGE) {
+      const cached = await env.USAGE.get(cacheKey);
+      if (cached) return json(JSON.parse(cached));
+    }
+    const upstream = await generateContent(env, credentials, {
+      systemInstruction: {parts: [{text: 'Create exactly ten useful, slightly challenging English words and expressions for adult everyday spoken conversation. Target CEFR B1-B2: clearly more useful and nuanced than basic A1-A2 words, while still common in real life. Prefer practical phrasal verbs, collocations, and precise everyday adjectives or verbs (for example: sort out, overwhelmed, postpone, reassure, worthwhile). Avoid academic, rare, or formal words. Include a short plain-English meaning and a natural spoken example for each. Choose distinct items and avoid words likely to repeat on adjacent dates. For beginner level, choose accessible B1 stretch vocabulary rather than basic words.'}]},
+      contents: [{role: 'user', parts: [{text: `Create the daily set for ${body.date}. Learner setting: ${body.difficulty}, but keep the words useful B1-B2 stretch vocabulary. Return exactly ten distinct items.`}]}],
+      generationConfig: {responseMimeType: 'application/json', responseSchema: vocabularySchema, temperature: 0.8, maxOutputTokens: 1100},
     });
-    if (upstream.status === 429) return json({error: 'AI quota reached'}, 429);
-    if (upstream.status === 401 || upstream.status === 403) return json({error: 'Gemini API key was rejected'}, 401);
-    if (!upstream.ok) return json({error: 'AI service unavailable'}, 502);
-    const raw = (await upstream.json())?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (upstream.error) return upstream.error;
+    const raw = upstream.data?.candidates?.[0]?.content?.parts?.[0]?.text;
     const result = JSON.parse(raw);
     if (!Array.isArray(result.words) || result.words.length !== 10 || result.words.some(word =>
       !validText(word.word, 40) || !word.word.trim() || !validText(word.meaning, 120) || !validText(word.example, 160))) {
@@ -183,12 +168,6 @@ async function dailyVocabulary(body, env, geminiApiKey) {
   } catch (_) {
     return json({error: 'AI service unavailable'}, 502);
   }
-}
-
-async function hash(input) {
-  const bytes = new TextEncoder().encode(input);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function hasValidAccessToken(request, env) {
@@ -209,36 +188,22 @@ async function hasValidAccessToken(request, env) {
   return accepted;
 }
 
-async function consumeDailyQuota(geminiApiKey, env) {
-  if (!env.USAGE) return true;
-  const day = new Date().toISOString().slice(0, 10);
-  const keyHash = await hash(geminiApiKey);
-  const userUsageKey = `requests:${day}:${keyHash}`;
-  const globalUsageKey = `requests:${day}:all-users`;
-  const userCount = Number(await env.USAGE.get(userUsageKey) || 0);
-  const globalCount = Number(await env.USAGE.get(globalUsageKey) || 0);
-  const userCap = Math.max(1, Number(env.DAILY_REQUEST_LIMIT || 450));
-  const globalCap = Math.max(1, Number(env.GLOBAL_DAILY_REQUEST_LIMIT || 45000));
-  if (userCount >= userCap || globalCount >= globalCap) return false;
-  await Promise.all([
-    env.USAGE.put(userUsageKey, String(userCount + 1), {expirationTtl: 172800}),
-    env.USAGE.put(globalUsageKey, String(globalCount + 1), {expirationTtl: 172800}),
-  ]);
-  return true;
-}
-
 export default {
   async fetch(request, env) {
     if (request.method !== 'POST') return json({error: 'Method not allowed'}, 405);
     const path = new URL(request.url).pathname;
     if (!['/v1/reply', '/v1/vocabulary'].includes(path)) return json({error: 'Not found'}, 404);
     const suppliedGeminiKey = (request.headers.get('x-gemini-api-key') || '').trim();
-    const legacyAuthorized = !suppliedGeminiKey && await hasValidAccessToken(request, env);
-    const geminiApiKey = suppliedGeminiKey || (legacyAuthorized ? env.GEMINI_API_KEY : '');
-    if (!geminiApiKey) {
+    const keys = configuredKeys(env);
+    const tokenAuthorized = await hasValidAccessToken(request, env);
+    // Existing apps already using an owner-configured key get pool failover too.
+    // An unrelated BYOK caller must never spend the owner's fallback quota.
+    const shared = tokenAuthorized || (!!suppliedGeminiKey && keys.includes(suppliedGeminiKey));
+    if (!suppliedGeminiKey && !tokenAuthorized) {
       return json({error: 'Unauthorized'}, 401);
     }
-  if (Number(request.headers.get('content-length') || 0) > 20000) {
+    const credentials = {shared, keys: shared ? keys : [suppliedGeminiKey]};
+    if (Number(request.headers.get('content-length') || 0) > 20000) {
       return json({error: 'Request too large'}, 413);
     }
     let body;
@@ -249,15 +214,11 @@ export default {
     } catch (_) {
       return json({error: 'Invalid JSON'}, 400);
     }
-    if (path === '/v1/vocabulary') return dailyVocabulary(body, env, geminiApiKey);
+    if (path === '/v1/vocabulary') return dailyVocabulary(body, env, credentials);
     if (!validate(body)) return json({error: 'Invalid request'}, 400);
     if (!env.GEMINI_MODEL) {
       return json({error: 'Gateway not configured'}, 503);
     }
-
-    // KV is eventually consistent, so the per-key and global limits are
-    // best-effort guardrails rather than strict atomic rate limits.
-    if (!await consumeDailyQuota(geminiApiKey, env)) return json({error: 'TalkMile daily request limit reached for this key'}, 429);
 
     const prompt = JSON.stringify({
       promptVersion: PROMPT_VERSION,
@@ -272,29 +233,17 @@ export default {
       storyState: body.storyState,
       recentTurns: body.recentTurns,
     });
-    const model = encodeURIComponent(env.GEMINI_MODEL);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 28000);
     try {
-      const upstream = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: 'POST', signal: controller.signal,
-          headers: {'content-type': 'application/json', 'x-goog-api-key': geminiApiKey},
-          body: JSON.stringify({
-            systemInstruction: {parts: [{text: SYSTEM_PROMPT}]},
-            contents: [{role: 'user', parts: [{text: prompt}]}],
-            generationConfig: {
-              responseMimeType: 'application/json', responseSchema: schema,
-              temperature: 0.75, maxOutputTokens: 500,
-            },
-          }),
+      const upstream = await generateContent(env, credentials, {
+        systemInstruction: {parts: [{text: SYSTEM_PROMPT}]},
+        contents: [{role: 'user', parts: [{text: prompt}]}],
+        generationConfig: {
+          responseMimeType: 'application/json', responseSchema: schema,
+          temperature: 0.75, maxOutputTokens: 500,
         },
-      );
-      if (upstream.status === 429) return json({error: 'AI quota reached'}, 429);
-      if (upstream.status === 401 || upstream.status === 403) return json({error: 'Gemini API key was rejected'}, 401);
-      if (!upstream.ok) return json({error: 'AI service unavailable'}, 502);
-      const result = await upstream.json();
+      });
+      if (upstream.error) return upstream.error;
+      const result = upstream.data;
       const raw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
       const reply = JSON.parse(raw);
       if (!validText(reply.spokenText, 1200) || !reply.spokenText.trim() ||
@@ -312,8 +261,6 @@ export default {
       return json(reply);
     } catch (_) {
       return json({error: 'AI service unavailable'}, 502);
-    } finally {
-      clearTimeout(timeout);
     }
   },
 };

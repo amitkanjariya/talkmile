@@ -44,11 +44,11 @@ class ConversationCubit extends Cubit<ConversationState> {
 
   Future<bool> start({String? topic}) async {
     if (active) return false;
-    if (store.gatewayUrl.isEmpty || (await store.getGeminiApiKey()).isEmpty) {
+    if (store.gatewayUrl.isEmpty || (await store.gatewayHeaders()).isEmpty) {
       emit(
         state.copyWith(
           phase: SessionPhase.error,
-          status: 'Add your Gemini API key in Settings to start.',
+          status: 'Set up AI access in Settings to start.',
         ),
       );
       return false;
@@ -182,7 +182,10 @@ class ConversationCubit extends Cubit<ConversationState> {
             await _waitToRetry(
               generation,
               retries,
-              isQuota: error.toString().toLowerCase().contains('quota'),
+              isQuota:
+                  error is AiQuotaException ||
+                  error.toString().toLowerCase().contains('quota'),
+              quotaMessage: error is AiQuotaException ? error.message : null,
             );
           } finally {
             _request = null;
@@ -306,6 +309,7 @@ class ConversationCubit extends Cubit<ConversationState> {
     int generation,
     int failures, {
     bool isQuota = false,
+    String? quotaMessage,
   }) async {
     final delay = isQuota
         ? const Duration(minutes: 1)
@@ -314,7 +318,7 @@ class ConversationCubit extends Cubit<ConversationState> {
       state.copyWith(
         phase: SessionPhase.temporarilyPaused,
         status: isQuota
-            ? 'AI is busy. Staying ready and trying again shortly.'
+            ? '${quotaMessage ?? 'AI limit reached.'} Retrying in 60s.'
             : 'Connection interrupted. Retrying in ${delay.inSeconds}s.',
       ),
     );

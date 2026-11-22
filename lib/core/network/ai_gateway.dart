@@ -3,6 +3,13 @@ import 'package:talkmile/core/data/local_store.dart';
 import 'package:talkmile/features/conversation/domain/conversation_models.dart';
 import 'package:talkmile/features/home/domain/practice_catalog.dart';
 
+class AiQuotaException implements Exception {
+  const AiQuotaException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 abstract interface class AiGatewayPort {
   Future<CoachResponse> reply({
     required LocalStore store,
@@ -36,9 +43,9 @@ class AiGateway implements AiGatewayPort {
 
   Future<List<DailyWord>> dailyWords(LocalStore store) async {
     final url = store.gatewayUrl;
-    final apiKey = await store.getGeminiApiKey();
-    if (url.isEmpty || apiKey.isEmpty) {
-      throw StateError('Add your Gemini API key in Settings.');
+    final headers = await store.gatewayHeaders();
+    if (url.isEmpty || headers.isEmpty) {
+      throw StateError('Set up AI access in Settings.');
     }
     final now = DateTime.now();
     final date =
@@ -51,7 +58,7 @@ class AiGateway implements AiGatewayPort {
     final response = await _dio.post<Map<String, dynamic>>(
       vocabularyUri.toString(),
       data: {'date': date, 'difficulty': store.difficulty},
-      options: Options(headers: {'X-Gemini-API-Key': apiKey}),
+      options: Options(headers: headers),
     );
     final words = response.data?['words'];
     if (words is! List || words.length != 10) {
@@ -85,11 +92,9 @@ class AiGateway implements AiGatewayPort {
     required CancelToken cancelToken,
   }) async {
     final url = store.gatewayUrl;
-    final apiKey = await store.getGeminiApiKey();
-    if (url.isEmpty || apiKey.isEmpty) {
-      throw StateError(
-        'Add your Gemini API key in Settings before starting.',
-      );
+    final headers = await store.gatewayHeaders();
+    if (url.isEmpty || headers.isEmpty) {
+      throw StateError('Set up AI access in Settings before starting.');
     }
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
@@ -107,7 +112,7 @@ class AiGateway implements AiGatewayPort {
             'reviewWords': reviewWords.take(10).toList(),
             'recentTurns': recentTurns.take(8).toList(),
           },
-          options: Options(headers: {'X-Gemini-API-Key': apiKey}),
+          options: Options(headers: headers),
           cancelToken: cancelToken,
         );
         return CoachResponse.fromJson(response.data);
@@ -115,11 +120,31 @@ class AiGateway implements AiGatewayPort {
         if (CancelToken.isCancel(error)) rethrow;
         final code = error.response?.statusCode;
         if (code == 401) {
-          throw StateError('Gemini API key was rejected. Check your key in Settings.');
+          if (headers.containsKey('Authorization')) {
+            throw StateError(
+              'Shared AI access was rejected. Check your access code or contact the TalkMile owner.',
+            );
+          }
+          throw StateError(
+            'Gemini API key was rejected. Check your key in Settings.',
+          );
         }
         if (code == 429) {
-          throw StateError(
-            'The AI quota is currently exhausted. Try again later.',
+          final data = error.response?.data;
+          final gatewayCode = data is Map ? data['code'] : null;
+          if (gatewayCode == 'GATEWAY_DAILY_LIMIT') {
+            throw const AiQuotaException(
+              'TalkMile daily service limit reached.',
+            );
+          }
+          // Use fixed messages instead of rendering arbitrary provider errors.
+          final poolExhausted =
+              headers.containsKey('Authorization') ||
+              (data is Map && data['scope'] == 'shared');
+          throw AiQuotaException(
+            poolExhausted
+                ? 'AI limit reached. All available Gemini keys are at their limit.'
+                : 'Your Gemini API limit is reached.',
           );
         }
         if (attempt == 2 || (code != null && code < 500)) {

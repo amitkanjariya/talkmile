@@ -48,6 +48,7 @@ class FakeVoice implements VoicePort {
 class FakeGateway implements AiGatewayPort {
   int calls = 0;
   int failuresRemaining = 0;
+  Object? failure;
   final correctionReviewCalls = <bool>[];
   final correctionHistoryCalls = <List<Map<String, String>>>[];
   final replies = <CoachResponse>[];
@@ -72,7 +73,7 @@ class FakeGateway implements AiGatewayPort {
     correctionHistoryCalls.add(correctionHistory);
     if (failuresRemaining > 0) {
       failuresRemaining--;
-      throw StateError('Temporary connection failure');
+      throw failure ?? StateError('Temporary connection failure');
     }
     if (replies.length >= calls) return replies[calls - 1];
     return const CoachResponse(
@@ -156,6 +157,42 @@ void main() {
     await cubit.close();
     await store.close();
   });
+
+  test(
+    'shared quota exhaustion is visible, silent and does not end the session',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      FlutterSecureStorage.setMockInitialValues({
+        'gatewayToken': 'shared-code',
+      });
+      final store = LocalStore(NativeDatabase.memory());
+      await store.open();
+      final voice = FakeVoice();
+      final gateway = FakeGateway()
+        ..failuresRemaining = 1
+        ..failure = const AiQuotaException(
+          'AI limit reached. All available Gemini keys are at their limit.',
+        );
+      final cubit = ConversationCubit(
+        voice: voice,
+        gateway: gateway,
+        store: store,
+      );
+      expect(await cubit.start(), isTrue);
+      await until(() => cubit.state.phase == SessionPhase.temporarilyPaused);
+      expect(
+        cubit.state.status,
+        contains('All available Gemini keys are at their limit.'),
+      );
+      expect(cubit.active, isTrue);
+      expect(voice.spoken, isEmpty);
+      expect(gateway.calls, 1);
+      await cubit.stop();
+      expect(cubit.state.phase, SessionPhase.stopped);
+      await cubit.close();
+      await store.close();
+    },
+  );
 
   test('reviews every captured correction after five minutes', () async {
     SharedPreferences.setMockInitialValues({});
