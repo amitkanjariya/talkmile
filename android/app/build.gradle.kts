@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,10 +7,22 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val releaseKeystorePath = System.getenv("TALKMILE_KEYSTORE")
-val releaseStorePassword = System.getenv("TALKMILE_STORE_PASSWORD")
-val releaseKeyAlias = System.getenv("TALKMILE_KEY_ALIAS")
-val releaseKeyPassword = System.getenv("TALKMILE_KEY_PASSWORD")
+val signingPropertiesFile = System.getenv("TALKMILE_SIGNING_PROPERTIES")
+    ?.let { file(it) }
+    ?: File(System.getProperty("user.home"), ".talkmile/signing/key.properties")
+val signingProperties = Properties().apply {
+    if (signingPropertiesFile.isFile) {
+        signingPropertiesFile.inputStream().use { load(it) }
+    }
+}
+fun signingValue(environmentName: String, propertyName: String): String? =
+    System.getenv(environmentName)?.takeIf { it.isNotBlank() }
+        ?: signingProperties.getProperty(propertyName)
+
+val releaseKeystorePath = signingValue("TALKMILE_KEYSTORE", "storeFile")
+val releaseStorePassword = signingValue("TALKMILE_STORE_PASSWORD", "storePassword")
+val releaseKeyAlias = signingValue("TALKMILE_KEY_ALIAS", "keyAlias")
+val releaseKeyPassword = signingValue("TALKMILE_KEY_PASSWORD", "keyPassword")
 val releaseSigningReady = listOf(
     releaseKeystorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword
 ).all { !it.isNullOrBlank() }
@@ -57,4 +71,18 @@ android {
 
 flutter {
     source = "../.."
+}
+
+// A successful Flutter build must never silently produce an unsigned release.
+val validateReleaseSigning by tasks.registering {
+    doLast {
+        check(releaseSigningReady) {
+            "Release signing is missing. Run tool/setup-release-signing.ps1 once, " +
+                "or configure TALKMILE_SIGNING_PROPERTIES / TALKMILE signing environment variables."
+        }
+        check(file(releaseKeystorePath!!).isFile) { "Release keystore file was not found." }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(validateReleaseSigning)
 }

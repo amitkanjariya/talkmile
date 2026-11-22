@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Release signing material stays outside the repository.
+**/key.properties
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pfx
