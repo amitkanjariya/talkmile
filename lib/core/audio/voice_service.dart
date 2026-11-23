@@ -13,6 +13,19 @@ class CompanionVoice {
   final bool isVerified;
 }
 
+/// Android's TTS API does not expose voice gender, but some engines include it
+/// in voice IDs (for example, `en-us-x-sfg#male_1-local`).
+String? companionVoiceGender(CompanionVoice voice) {
+  final name = voice.name.toLowerCase();
+  if (RegExp(r'(?:^|[^a-z])(?:female|woman|feminine)(?:$|[^a-z])').hasMatch(name)) {
+    return 'female';
+  }
+  if (RegExp(r'(?:^|[^a-z])(?:male|man|masculine)(?:$|[^a-z])').hasMatch(name)) {
+    return 'male';
+  }
+  return null;
+}
+
 CompanionVoice? chooseCompanionVoice(
   List<CompanionVoice> voices,
   String partner,
@@ -23,9 +36,7 @@ CompanionVoice? chooseCompanionVoice(
   }).toList();
   if (english.isEmpty) return null;
 
-  final marker = partner == 'male'
-      ? RegExp(r'\b(male|man)\b', caseSensitive: false)
-      : RegExp(r'\b(female|woman)\b', caseSensitive: false);
+  final expectedGender = partner == 'male' ? 'male' : 'female';
   int rank(CompanionVoice voice) {
     final locale = voice.locale.toLowerCase().replaceAll('_', '-');
     if (locale == 'en-in') return 0;
@@ -35,10 +46,18 @@ CompanionVoice? chooseCompanionVoice(
   }
 
   english.sort((a, b) {
+    int genderRank(CompanionVoice voice) {
+      final gender = companionVoiceGender(voice);
+      if (gender == expectedGender) return 0;
+      if (gender == null) return 1;
+      return 2;
+    }
+
+    final genderOrder = genderRank(a).compareTo(genderRank(b));
+    if (genderOrder != 0) return genderOrder;
     final localeOrder = rank(a).compareTo(rank(b));
     if (localeOrder != 0) return localeOrder;
-    return (marker.hasMatch(b.name) ? 1 : 0) -
-        (marker.hasMatch(a.name) ? 1 : 0);
+    return a.name.compareTo(b.name);
   });
   return english.first;
 }
@@ -65,6 +84,7 @@ class VoiceService implements VoicePort {
   bool _sessionActive = false;
   String? _selectedVoiceName;
   String? _selectedVoiceLocale;
+  double _selectedVoicePitch = 1;
   @override
   void Function()? onNotificationStop;
 
@@ -167,19 +187,20 @@ class VoiceService implements VoicePort {
     }
     _selectedVoiceName = selected.name;
     _selectedVoiceLocale = selected.locale;
-    final marker = partner == 'male'
-        ? RegExp(r'\b(male|man)\b', caseSensitive: false)
-        : RegExp(r'\b(female|woman)\b', caseSensitive: false);
+    final genderMatch = companionVoiceGender(selected) == partner;
+    // If an engine exposes no gender labels, a modestly lower pitch makes its
+    // male companion sound less like the engine's default feminine voice.
+    _selectedVoicePitch = partner == 'male' && !genderMatch ? .84 : 1;
     await _tts.setVoice({'name': selected.name, 'locale': selected.locale});
+    await _tts.setPitch(_selectedVoicePitch);
     final indianEnglish =
         selected.locale.toLowerCase().replaceAll('_', '-') == 'en-in';
-    final genderHint = marker.hasMatch(selected.name);
     if (!indianEnglish) {
       return 'No Indian English voice is installed. Using ${selected.name} (${selected.locale}).';
     }
-    return genderHint
-        ? 'Using ${selected.name}. Voice gender and accent depend on the installed TTS engine.'
-        : 'This device does not identify a ${partner == 'male' ? 'male' : 'female'} Indian English voice. Using ${selected.name}.';
+    return genderMatch
+        ? 'Using ${selected.name}.'
+        : 'Using ${selected.name} with a lower pitch; install a male English voice for a closer match.';
   }
 
   @override
@@ -191,10 +212,12 @@ class VoiceService implements VoicePort {
         'rate': rate,
         'voiceName': _selectedVoiceName,
         'locale': _selectedVoiceLocale,
+        'pitch': _selectedVoicePitch,
       });
       return;
     }
     await _speech.stop();
+    await _tts.setPitch(_selectedVoicePitch);
     await _tts.setSpeechRate(rate);
     await _tts.speak(text);
   }

@@ -47,6 +47,7 @@ class SessionService : Service() {
     private data class PendingSpeech(
         val text: String,
         val rate: Float,
+        val pitch: Float,
         val voiceName: String?,
         val locale: String?,
         val result: MethodChannel.Result,
@@ -204,6 +205,7 @@ class SessionService : Service() {
         rate: Double,
         voiceName: String?,
         locale: String?,
+        pitch: Double,
         result: MethodChannel.Result,
     ) {
         if (text.isBlank()) {
@@ -217,6 +219,7 @@ class SessionService : Service() {
         val request = PendingSpeech(
             text = text,
             rate = rate.toFloat().coerceIn(0.1f, 2.0f),
+            pitch = pitch.toFloat().coerceIn(0.5f, 2.0f),
             voiceName = voiceName,
             locale = locale,
             result = result,
@@ -274,6 +277,7 @@ class SessionService : Service() {
         request.voiceName?.let { requestedName ->
             tts.voices?.firstOrNull { it.name == requestedName }?.let(tts::setVoice)
         }
+        tts.setPitch(request.pitch)
         tts.setSpeechRate(request.rate)
         val file = File(cacheDir, "talkmile-${request.utteranceId}.wav")
         speechFile = file
