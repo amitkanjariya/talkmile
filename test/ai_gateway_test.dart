@@ -99,6 +99,35 @@ void main() {
     },
   );
 
+  test('daily words reuse the same set for the whole day', () async {
+    final now = DateTime.now();
+    final date =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    await store.saveDailyWordSet(date, [
+      for (var i = 0; i < 10; i++)
+        {
+          'word': 'saved$i',
+          'meaning': 'Saved meaning',
+          'example': 'Saved example',
+        },
+    ]);
+    var requests = 0;
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requests++;
+          handler.reject(DioException(requestOptions: options));
+        },
+      ),
+    );
+
+    final words = await AiGateway(dio).dailyWords(store);
+
+    expect(requests, 0);
+    expect(words, hasLength(10));
+    expect(words.first.word, 'saved0');
+  });
+
   test(
     'exhausted pool is reported without immediate app retries or secret errors',
     () async {

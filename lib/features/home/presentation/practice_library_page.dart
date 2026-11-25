@@ -124,6 +124,19 @@ class _VocabularyPageState extends State<VocabularyPage> {
       body: FutureBuilder<List<DailyWord>>(
         future: _words,
         builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 14),
+                  Text('Loading today’s words…'),
+                ],
+              ),
+            );
+          }
           final words = snapshot.data ?? _fallbackWords();
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),

@@ -145,6 +145,33 @@ class LocalStore extends GeneratedDatabase {
     await _secure.write(key: 'dailyWordSets', value: jsonEncode(history));
   }
 
+  Future<List<Map<String, String>>?> readDailyWordSet(String date) async {
+    final raw = await _secure.read(key: 'dailyWordSets');
+    if (raw == null) return null;
+    try {
+      final history = jsonDecode(raw);
+      final words = history is Map<String, dynamic> ? history[date] : null;
+      if (words is! List || words.length != 10) return null;
+      final result = <Map<String, String>>[];
+      for (final entry in words) {
+        if (entry is! Map ||
+            entry['word'] is! String ||
+            entry['meaning'] is! String ||
+            entry['example'] is! String) {
+          return null;
+        }
+        result.add({
+          'word': entry['word'] as String,
+          'meaning': entry['meaning'] as String,
+          'example': entry['example'] as String,
+        });
+      }
+      return result;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<String>> weeklyVocabularyWords() async {
     final raw = await _secure.read(key: 'dailyWordSets');
     if (raw == null) return const [];

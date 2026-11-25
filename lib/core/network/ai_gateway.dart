@@ -42,14 +42,17 @@ class AiGateway implements AiGatewayPort {
   final Dio _dio;
 
   Future<List<DailyWord>> dailyWords(LocalStore store) async {
+    final now = DateTime.now();
+    final date =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final cached = await store.readDailyWordSet(date);
+    if (cached != null) return cached.map(DailyWord.fromJson).toList();
+
     final url = store.gatewayUrl;
     final headers = await store.gatewayHeaders();
     if (url.isEmpty) {
       throw StateError('The TalkMile AI service is unavailable.');
     }
-    final now = DateTime.now();
-    final date =
-        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     final configured = Uri.parse(url);
     final basePath = configured.path
         .replaceFirst(RegExp(r'/v1/reply/?$'), '')
