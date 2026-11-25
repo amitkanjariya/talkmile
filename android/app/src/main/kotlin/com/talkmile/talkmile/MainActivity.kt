@@ -108,6 +108,23 @@ class MainActivity : FlutterActivity() {
                     SessionService.activeInstance?.recoverSpeechRecognizer()
                     result.success(null)
                 }
+                "recoverSpeech" -> {
+                    val service = SessionService.activeInstance
+                    if (service != null) {
+                        service.recoverSpeech()
+                    } else {
+                        try {
+                            startForegroundService(
+                                Intent(this, SessionService::class.java)
+                                    .setAction(SessionService.ACTION_START),
+                            )
+                        } catch (error: Exception) {
+                            result.error("SPEECH_RECOVERY", error.message, null)
+                            return@setMethodCallHandler
+                        }
+                    }
+                    result.success(null)
+                }
                 "stop" -> {
                     val intent = Intent(this, SessionService::class.java)
                         .setAction(SessionService.ACTION_STOP)

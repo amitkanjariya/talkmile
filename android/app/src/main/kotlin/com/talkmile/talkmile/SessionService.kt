@@ -43,6 +43,13 @@ class SessionService : Service() {
     private var speechFile: File? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val listeningTimeout = Runnable { finishListening(partialTranscript) }
+    private val speechTimeout = Runnable {
+        if (pendingSpeech != null) {
+            Log.e(TAG, "Speech synthesis or playback timed out; restarting TTS")
+            failPendingSpeech("Speech was interrupted. Retrying.")
+            restartTextToSpeech()
+        }
+    }
 
     private data class PendingSpeech(
         val text: String,
@@ -225,13 +232,33 @@ class SessionService : Service() {
             result = result,
         )
         pendingSpeech = request
+        scheduleSpeechTimeout(45_000L)
         if (ttsReady) synthesize(request)
+    }
+
+    fun recoverSpeech() {
+        pendingSpeech?.let { failPendingSpeech("Speech was interrupted. Retrying.") }
+        restartTextToSpeech()
+    }
+
+    private fun restartTextToSpeech() {
+        mainHandler.removeCallbacks(speechTimeout)
+        ttsReady = false
+        textToSpeech?.stop()
+        textToSpeech?.shutdown()
+        textToSpeech = null
+        initializeTextToSpeech()
+    }
+
+    private fun scheduleSpeechTimeout(delayMs: Long) {
+        mainHandler.removeCallbacks(speechTimeout)
+        mainHandler.postDelayed(speechTimeout, delayMs)
     }
 
     private fun initializeTextToSpeech() {
         textToSpeech = TextToSpeech(applicationContext) { status ->
             if (status != TextToSpeech.SUCCESS) {
-                ttsReady = true
+                ttsReady = false
                 Log.e(TAG, "Text-to-speech initialization failed: $status")
                 failPendingSpeech("Text-to-speech could not be initialized.")
                 return@TextToSpeech
@@ -243,6 +270,8 @@ class SessionService : Service() {
 
                 override fun onDone(utteranceId: String?) {
                     if (utteranceId != pendingSpeech?.utteranceId) return
+                    Log.i(TAG, "Speech synthesis completed; starting foreground playback")
+                    scheduleSpeechTimeout(60_000L)
                     mainHandler.post { playPendingSpeechFile() }
                 }
 
@@ -310,6 +339,9 @@ class SessionService : Service() {
             player.setDataSource(file.absolutePath)
             player.setOnPreparedListener { prepared ->
                 if (pendingSpeech === request) {
+                    scheduleSpeechTimeout(
+                        (prepared.duration.toLong() + 20_000L).coerceIn(30_000L, 300_000L),
+                    )
                     prepared.start()
                     Log.i(TAG, "Foreground reply playback started")
                 }
@@ -332,6 +364,7 @@ class SessionService : Service() {
     }
 
     private fun releaseSpeechPlayer() {
+        mainHandler.removeCallbacks(speechTimeout)
         speechPlayer?.let { player ->
             try { player.stop() } catch (_: IllegalStateException) {}
             player.reset()
@@ -344,12 +377,14 @@ class SessionService : Service() {
 
     private fun failPendingSpeech(message: String) {
         val request = pendingSpeech ?: return
+        mainHandler.removeCallbacks(speechTimeout)
         pendingSpeech = null
         releaseSpeechPlayer()
         request.result.error("TTS_FAILED", message, null)
     }
 
     private fun stopSpeech() {
+        mainHandler.removeCallbacks(speechTimeout)
         val request = pendingSpeech
         pendingSpeech = null
         textToSpeech?.stop()

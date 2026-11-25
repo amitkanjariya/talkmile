@@ -341,7 +341,7 @@ class ConversationCubit extends Cubit<ConversationState> {
           ),
         );
         try {
-          await voice.recover();
+          await voice.recoverSpeech();
         } catch (_) {}
         await Future<void>.delayed(
           Duration(seconds: [2, 4, 8, 16, 30][(failures - 1).clamp(0, 4)]),

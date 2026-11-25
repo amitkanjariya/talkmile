@@ -70,6 +70,7 @@ abstract interface class VoicePort {
   Future<void> speak(String text, {double rate});
   Future<String?> listen();
   Future<void> recover();
+  Future<void> recoverSpeech();
   Future<void> stop();
 }
 
@@ -276,6 +277,26 @@ class VoiceService implements VoicePort {
     await _speech.cancel();
     _ready = false;
     await initialize();
+  }
+
+  @override
+  Future<void> recoverSpeech() async {
+    if (_stopped) return;
+    if (_sessionActive) {
+      await _session.invokeMethod<void>('recoverSpeech');
+      return;
+    }
+    await _tts.stop();
+    await _tts.awaitSpeakCompletion(true);
+    await _tts.setLanguage('en-IN');
+    await _tts.setAudioAttributesForNavigation();
+    if (_selectedVoiceName != null && _selectedVoiceLocale != null) {
+      await _tts.setVoice({
+        'name': _selectedVoiceName!,
+        'locale': _selectedVoiceLocale!,
+      });
+    }
+    await _tts.setPitch(_selectedVoicePitch);
   }
 
   void _finishTurn(String? words) {

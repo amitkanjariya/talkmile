@@ -17,6 +17,8 @@ class FakeVoice implements VoicePort {
   final spoken = <String>[];
   Completer<String?>? pending;
   int stops = 0;
+  int speechFailuresRemaining = 0;
+  int speechRecoveries = 0;
 
   @override
   Future<void> initialize() async {}
@@ -26,6 +28,10 @@ class FakeVoice implements VoicePort {
   Future<String?> startVisibleSession() async => null;
   @override
   Future<void> speak(String text, {double rate = .48}) async {
+    if (speechFailuresRemaining > 0) {
+      speechFailuresRemaining--;
+      throw StateError('Simulated TTS interruption');
+    }
     spoken.add(text);
   }
 
@@ -37,6 +43,11 @@ class FakeVoice implements VoicePort {
 
   @override
   Future<void> recover() async {}
+
+  @override
+  Future<void> recoverSpeech() async {
+    speechRecoveries++;
+  }
 
   @override
   Future<void> stop() async {
@@ -94,6 +105,28 @@ Future<void> until(bool Function() condition, {int attempts = 100}) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('restarts speech output after a transient TTS failure', () async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    final store = LocalStore(NativeDatabase.memory());
+    await store.open();
+    final voice = FakeVoice()..speechFailuresRemaining = 1;
+    final cubit = ConversationCubit(
+      voice: voice,
+      gateway: FakeGateway(),
+      store: store,
+    );
+
+    expect(await cubit.start(), isTrue);
+    await until(() => cubit.state.phase == SessionPhase.listening, attempts: 400);
+    expect(voice.speechRecoveries, 1);
+    expect(voice.spoken, ['Welcome. How was your day?']);
+
+    await cubit.stop();
+    await store.close();
+    await cubit.close();
+  });
 
   test(
     'silence does not speak prompts and Stop releases the session',
