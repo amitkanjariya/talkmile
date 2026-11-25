@@ -36,6 +36,7 @@ class SessionService : Service() {
     private var pendingListenResult: MethodChannel.Result? = null
     private var partialTranscript = ""
     private var preferOnDeviceRecognizer = false
+    private var missedSpeechTurns = 0
     private var textToSpeech: TextToSpeech? = null
     private var ttsReady = false
     private var pendingSpeech: PendingSpeech? = null
@@ -152,27 +153,41 @@ class SessionService : Service() {
 
                 override fun onError(error: Int) {
                     Log.w(TAG, "Speech recognizer error: $error")
-                    if (preferOnDeviceRecognizer &&
-                        (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
-                            error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)) {
-                        preferOnDeviceRecognizer = false
-                    }
                     if (error == SpeechRecognizer.ERROR_NO_MATCH ||
                         error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                        if (partialTranscript.isBlank()) missedSpeechTurns++ else missedSpeechTurns = 0
+                        if (preferOnDeviceRecognizer && missedSpeechTurns >= 3) {
+                            preferOnDeviceRecognizer = false
+                            Log.w(TAG, "Repeated on-device no-speech results; switching to system recognizer")
+                        }
                         finishListening(partialTranscript)
                     } else {
+                        if (preferOnDeviceRecognizer &&
+                            (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
+                                error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ||
+                                error == SpeechRecognizer.ERROR_NETWORK ||
+                                error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT ||
+                                error == SpeechRecognizer.ERROR_SERVER ||
+                                error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED)) {
+                            preferOnDeviceRecognizer = false
+                            Log.w(TAG, "On-device recognizer failed; switching to system recognizer")
+                        }
                         finishListening(errorCode = error)
                     }
                 }
 
                 override fun onResults(results: Bundle?) {
                     val transcript = bestTranscript(results).ifBlank { partialTranscript }
+                    if (transcript.isNotBlank()) missedSpeechTurns = 0
                     finishListening(transcript)
                 }
 
                 override fun onPartialResults(partialResults: Bundle?) {
                     val latest = bestTranscript(partialResults)
-                    if (latest.isNotBlank()) partialTranscript = latest
+                    if (latest.isNotBlank()) {
+                        partialTranscript = latest
+                        missedSpeechTurns = 0
+                    }
                 }
 
                 override fun onEvent(eventType: Int, params: Bundle?) = Unit
@@ -183,7 +198,7 @@ class SessionService : Service() {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOnDeviceRecognizer)
             }
             recognizer.startListening(intent)
             mainHandler.postDelayed(listeningTimeout, 55_000L)

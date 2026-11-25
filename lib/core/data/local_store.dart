@@ -77,6 +77,32 @@ class LocalStore extends GeneratedDatabase {
   String get themeMode => _preferences.getString('themeMode') ?? 'system';
   Future<void> setThemeMode(String value) =>
       _preferences.setString('themeMode', value);
+
+  Future<void> saveSessionResume({
+    required String topic,
+    required String utterance,
+  }) async {
+    // Write the resume payload before setting the active flag so a crash during
+    // the first write cannot leave a partially initialized session to restore.
+    await _preferences.setString('sessionResumeTopic', topic);
+    await _preferences.setString('sessionResumeUtterance', utterance);
+    await _preferences.setBool('sessionResumeActive', true);
+  }
+
+  SessionResume? get sessionResume {
+    if (_preferences.getBool('sessionResumeActive') != true) return null;
+    final topic = _preferences.getString('sessionResumeTopic');
+    final utterance = _preferences.getString('sessionResumeUtterance');
+    if (topic == null || utterance == null || utterance.isEmpty) return null;
+    return SessionResume(topic: topic, utterance: utterance);
+  }
+
+  Future<void> clearSessionResume() async {
+    await _preferences.setBool('sessionResumeActive', false);
+    await _preferences.remove('sessionResumeTopic');
+    await _preferences.remove('sessionResumeUtterance');
+  }
+
   Future<bool> shouldReviewWeeklyVocabulary() async {
     final now = DateTime.now();
     final monday = DateTime(now.year, now.month, now.day - now.weekday + 1);
@@ -270,6 +296,13 @@ class LearningInsights {
   });
   final Map<String, int> vocabulary;
   final List<String> corrections;
+}
+
+class SessionResume {
+  const SessionResume({required this.topic, required this.utterance});
+
+  final String topic;
+  final String utterance;
 }
 
 class ProgressSummary {

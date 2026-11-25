@@ -19,13 +19,22 @@ class FakeVoice implements VoicePort {
   int stops = 0;
   int speechFailuresRemaining = 0;
   int speechRecoveries = 0;
+  int listenFailuresRemaining = 0;
+  int recognizerRecoveries = 0;
+  bool? lastBatteryPromptPreference;
 
   @override
   Future<void> initialize() async {}
   @override
   Future<String> selectVoice(String partner) async => 'Using test voice';
   @override
-  Future<String?> startVisibleSession() async => null;
+  Future<String?> startVisibleSession({
+    bool promptForBatteryExemption = true,
+  }) async {
+    lastBatteryPromptPreference = promptForBatteryExemption;
+    return null;
+  }
+
   @override
   Future<void> speak(String text, {double rate = .48}) async {
     if (speechFailuresRemaining > 0) {
@@ -36,13 +45,19 @@ class FakeVoice implements VoicePort {
   }
 
   @override
-  Future<String?> listen() {
+  Future<String?> listen() async {
+    if (listenFailuresRemaining > 0) {
+      listenFailuresRemaining--;
+      throw StateError('Simulated microphone interruption');
+    }
     pending = Completer<String?>();
     return pending!.future;
   }
 
   @override
-  Future<void> recover() async {}
+  Future<void> recover() async {
+    recognizerRecoveries++;
+  }
 
   @override
   Future<void> recoverSpeech() async {
@@ -106,6 +121,36 @@ Future<void> until(bool Function() condition, {int attempts = 100}) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'restores an unfinished session when the app process restarts',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'sessionResumeActive': true,
+        'sessionResumeTopic': 'Open conversation',
+        'sessionResumeUtterance': 'I visited my cousin yesterday.',
+      });
+      FlutterSecureStorage.setMockInitialValues({});
+      final store = LocalStore(NativeDatabase.memory());
+      await store.open();
+      final voice = FakeVoice();
+      final gateway = FakeGateway();
+      final cubit = ConversationCubit(
+        voice: voice,
+        gateway: gateway,
+        store: store,
+      );
+
+      await until(() => cubit.state.phase == SessionPhase.listening);
+      expect(gateway.calls, 1);
+      expect(voice.lastBatteryPromptPreference, isFalse);
+      expect(cubit.active, isTrue);
+      await cubit.stop();
+      expect(store.sessionResume, isNull);
+      await cubit.close();
+      await store.close();
+    },
+  );
+
   test('restarts speech output after a transient TTS failure', () async {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
@@ -119,9 +164,37 @@ void main() {
     );
 
     expect(await cubit.start(), isTrue);
-    await until(() => cubit.state.phase == SessionPhase.listening, attempts: 400);
+    await until(
+      () => cubit.state.phase == SessionPhase.listening,
+      attempts: 400,
+    );
     expect(voice.speechRecoveries, 1);
     expect(voice.spoken, ['Welcome. How was your day?']);
+
+    await cubit.stop();
+    await store.close();
+    await cubit.close();
+  });
+
+  test('keeps the session active through microphone interruptions', () async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    final store = LocalStore(NativeDatabase.memory());
+    await store.open();
+    final voice = FakeVoice()..listenFailuresRemaining = 1;
+    final cubit = ConversationCubit(
+      voice: voice,
+      gateway: FakeGateway(),
+      store: store,
+    );
+
+    expect(await cubit.start(), isTrue);
+    await until(
+      () => cubit.state.phase == SessionPhase.listening,
+      attempts: 400,
+    );
+    expect(cubit.active, isTrue);
+    expect(voice.recognizerRecoveries, 1);
 
     await cubit.stop();
     await store.close();

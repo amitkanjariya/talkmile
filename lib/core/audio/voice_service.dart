@@ -17,10 +17,14 @@ class CompanionVoice {
 /// in voice IDs (for example, `en-us-x-sfg#male_1-local`).
 String? companionVoiceGender(CompanionVoice voice) {
   final name = voice.name.toLowerCase();
-  if (RegExp(r'(?:^|[^a-z])(?:female|woman|feminine)(?:$|[^a-z])').hasMatch(name)) {
+  if (RegExp(
+    r'(?:^|[^a-z])(?:female|woman|feminine)(?:$|[^a-z])',
+  ).hasMatch(name)) {
     return 'female';
   }
-  if (RegExp(r'(?:^|[^a-z])(?:male|man|masculine)(?:$|[^a-z])').hasMatch(name)) {
+  if (RegExp(
+    r'(?:^|[^a-z])(?:male|man|masculine)(?:$|[^a-z])',
+  ).hasMatch(name)) {
     return 'male';
   }
   return null;
@@ -66,7 +70,7 @@ abstract interface class VoicePort {
   set onNotificationStop(void Function()? callback);
   Future<void> initialize();
   Future<String> selectVoice(String partner);
-  Future<String?> startVisibleSession();
+  Future<String?> startVisibleSession({bool promptForBatteryExemption = true});
   Future<void> speak(String text, {double rate});
   Future<String?> listen();
   Future<void> recover();
@@ -122,7 +126,18 @@ class VoiceService implements VoicePort {
   }
 
   @override
-  Future<String?> startVisibleSession() async {
+  Future<String?> startVisibleSession({
+    bool promptForBatteryExemption = true,
+  }) async {
+    if (!promptForBatteryExemption) {
+      final permissions = await permissionStatus();
+      if (permissions['microphone'] != true) {
+        throw StateError('Allow microphone access to resume your session.');
+      }
+      if (permissions['notification'] != true) {
+        throw StateError('Allow notifications to resume your session.');
+      }
+    }
     final notificationAllowed = await _session.invokeMethod<bool>(
       'requestNotificationPermission',
     );
@@ -131,9 +146,9 @@ class VoiceService implements VoicePort {
         'Allow notifications to show the active microphone session.',
       );
     }
-    final backgroundAllowed = await _session.invokeMethod<bool>(
-      'requestBackgroundBatteryAccess',
-    );
+    final backgroundAllowed = promptForBatteryExemption
+        ? await _session.invokeMethod<bool>('requestBackgroundBatteryAccess')
+        : (await permissionStatus())['batteryOptimization'] == true;
     _stopped = false;
     await _session.invokeMethod<void>('start');
     _sessionActive = true;
@@ -309,9 +324,19 @@ class VoiceService implements VoicePort {
     _stopped = true;
     _sessionActive = false;
     _finishTurn(null);
-    await _speech.cancel();
-    await _tts.stop();
-    await _session.invokeMethod<void>('stop');
+    // Stop the foreground service first so a wedged platform speech plugin
+    // cannot delay the user's explicit end-session action.
+    try {
+      await _session
+          .invokeMethod<void>('stop')
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {}
+    try {
+      await _speech.cancel().timeout(const Duration(seconds: 2));
+    } catch (_) {}
+    try {
+      await _tts.stop().timeout(const Duration(seconds: 2));
+    } catch (_) {}
   }
 
   Future<void> cancelGuide() async {

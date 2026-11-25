@@ -18,6 +18,7 @@ class ConversationCubit extends Cubit<ConversationState> {
   }) : _now = now ?? DateTime.now,
        super(const ConversationState()) {
     voice.onNotificationStop = stop;
+    unawaited(_restorePersistedSession());
   }
   final VoicePort voice;
   final AiGatewayPort gateway;
@@ -43,6 +44,24 @@ class ConversationCubit extends Cubit<ConversationState> {
   };
 
   Future<bool> start({String? topic}) async {
+    return _beginSession(topic: topic, resumeUtterance: null, restoring: false);
+  }
+
+  Future<void> _restorePersistedSession() async {
+    final saved = await _tryLocalRead(() async => store.sessionResume);
+    if (saved == null || isClosed || active) return;
+    await _beginSession(
+      topic: saved.topic == 'Open conversation' ? null : saved.topic,
+      resumeUtterance: saved.utterance,
+      restoring: true,
+    );
+  }
+
+  Future<bool> _beginSession({
+    required String? topic,
+    required String? resumeUtterance,
+    required bool restoring,
+  }) async {
     if (active) return false;
     if (store.gatewayUrl.isEmpty) {
       emit(
@@ -73,14 +92,23 @@ class ConversationCubit extends Cubit<ConversationState> {
         personaFor(store.companion).gender,
       );
       if (generation != _generation) return false;
-      final backgroundNotice = await voice.startVisibleSession();
+      final backgroundNotice = await voice.startVisibleSession(
+        promptForBatteryExemption: !restoring,
+      );
       if (generation != _generation) {
         await voice.stop();
         return false;
       }
       _startedAt = _now();
+      await _tryLocalWrite(
+        () => store.saveSessionResume(
+          topic: topic ?? 'Open conversation',
+          utterance: resumeUtterance ?? _initialUtterance(topic),
+        ),
+      );
       _nextCorrectionReview = _startedAt!.add(const Duration(minutes: 5));
-      _weeklyVocabularyReview = await store.shouldReviewWeeklyVocabulary();
+      _weeklyVocabularyReview =
+          await _tryLocalRead(store.shouldReviewWeeklyVocabulary) ?? false;
       _timer?.cancel();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!isClosed && _startedAt != null) {
@@ -95,10 +123,14 @@ class ConversationCubit extends Cubit<ConversationState> {
           ].whereType<String>().where((text) => text.isNotEmpty).join(' '),
         ),
       );
-      unawaited(_run(generation, topic: topic));
+      unawaited(
+        _run(generation, topic: topic, resumeUtterance: resumeUtterance),
+      );
       return true;
     } catch (error) {
-      await voice.stop();
+      try {
+        await voice.stop().timeout(const Duration(seconds: 5));
+      } catch (_) {}
       emit(state.copyWith(phase: SessionPhase.error, status: _message(error)));
       return false;
     }
@@ -111,20 +143,20 @@ class ConversationCubit extends Cubit<ConversationState> {
   }) async {
     var utterance = resumeUtterance ?? '';
     try {
-      if (resumeUtterance == null) {
-        final saved = await store.readStory();
+      if (resumeUtterance == null || topic == 'Continue previous story') {
+        final saved = await _tryLocalRead(store.readStory);
         _storyState = topic == 'Continue previous story'
             ? (saved?['storyState'] as String? ?? '')
             : '';
       }
-      utterance =
-          resumeUtterance ??
-          (topic == null
-              ? 'Start a friendly speaking practice. Introduce an interesting everyday topic.'
-              : topic == 'Continue previous story' && _storyState.isNotEmpty
-              ? 'Continue the saved interactive story and ask what I do next.'
-              : 'Start a speaking practice about $topic.');
+      utterance = resumeUtterance ?? _initialUtterance(topic);
       while (generation == _generation && !isClosed) {
+        await _tryLocalWrite(
+          () => store.saveSessionResume(
+            topic: topic ?? 'Open conversation',
+            utterance: utterance,
+          ),
+        );
         emit(
           state.copyWith(
             phase: SessionPhase.processing,
@@ -138,7 +170,8 @@ class ConversationCubit extends Cubit<ConversationState> {
             correctionReviewDue && _correctionHistory.isNotEmpty;
         final persona = personaFor(store.companion);
         final reviewWords = _weeklyVocabularyReview
-            ? await store.weeklyVocabularyWords()
+            ? await _tryLocalRead(store.weeklyVocabularyWords) ??
+                  const <String>[]
             : const <String>[];
         CoachResponse? reply;
         var retries = 0;
@@ -192,29 +225,39 @@ class ConversationCubit extends Cubit<ConversationState> {
           }
         }
         if (reply == null || generation != _generation) break;
+        final completedReply = reply;
         if (correctionReviewDue) {
           _nextCorrectionReview = _now().add(const Duration(minutes: 5));
         }
         if (correctionReview) _correctionHistory.clear();
-        _correctionHistory.addAll(reply.corrections);
+        _correctionHistory.addAll(completedReply.corrections);
         if (_correctionHistory.length > 16) {
           _correctionHistory.removeRange(0, _correctionHistory.length - 16);
         }
         if (_weeklyVocabularyReview) {
-          await store.markWeeklyVocabularyReview();
+          await _tryLocalWrite(store.markWeeklyVocabularyReview);
           _weeklyVocabularyReview = false;
         }
-        _storyState = reply.storyState;
-        _lastCorrection = reply.correction ?? '';
-        _lastSpeech = reply.speech;
-        if (reply.chapterCompleted) _chapters++;
-        await store.saveStory({
-          'storyState': _storyState,
-          'topic': state.topic,
-        });
-        await store.recordInsights(reply.vocabulary, reply.correction);
-        for (final correction in reply.corrections.skip(1)) {
-          await store.recordInsights(const [], correction.improved);
+        _storyState = completedReply.storyState;
+        _lastCorrection = completedReply.correction ?? '';
+        _lastSpeech = completedReply.speech;
+        if (completedReply.chapterCompleted) _chapters++;
+        await _tryLocalWrite(
+          () => store.saveStory({
+            'storyState': _storyState,
+            'topic': state.topic,
+          }),
+        );
+        await _tryLocalWrite(
+          () => store.recordInsights(
+            completedReply.vocabulary,
+            completedReply.correction,
+          ),
+        );
+        for (final correction in completedReply.corrections.skip(1)) {
+          await _tryLocalWrite(
+            () => store.recordInsights(const [], correction.improved),
+          );
         }
         _remember(utterance, _lastSpeech);
         emit(
@@ -226,6 +269,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         );
         await _speakUntilAvailable(_lastSpeech);
         if (generation != _generation) break;
+        var microphoneFailures = 0;
         while (generation == _generation) {
           emit(
             state.copyWith(
@@ -238,19 +282,24 @@ class ConversationCubit extends Cubit<ConversationState> {
             heard = await voice.listen();
           } catch (_) {
             if (generation != _generation) break;
+            microphoneFailures++;
+            final delay = Duration(
+              seconds: [2, 4, 8, 16, 30][(microphoneFailures - 1).clamp(0, 4)],
+            );
             emit(
               state.copyWith(
                 phase: SessionPhase.recovering,
-                status: 'Reconnecting to the microphone',
+                status: 'Reconnecting to the microphone in ${delay.inSeconds}s',
               ),
             );
             try {
-              await voice.recover();
+              await voice.recover().timeout(const Duration(seconds: 10));
             } catch (_) {}
-            await Future<void>.delayed(const Duration(seconds: 2));
+            await Future<void>.delayed(delay);
             continue;
           }
           if (generation != _generation) break;
+          microphoneFailures = 0;
           if (heard == null || heard.isEmpty) {
             emit(
               state.copyWith(
@@ -268,6 +317,12 @@ class ConversationCubit extends Cubit<ConversationState> {
           } else {
             utterance = heard;
           }
+          await _tryLocalWrite(
+            () => store.saveSessionResume(
+              topic: topic ?? 'Open conversation',
+              utterance: utterance,
+            ),
+          );
           break;
         }
         if (generation != _generation) break;
@@ -284,6 +339,12 @@ class ConversationCubit extends Cubit<ConversationState> {
     }
   }
 
+  String _initialUtterance(String? topic) => topic == null
+      ? 'Start a friendly speaking practice. Introduce an interesting everyday topic.'
+      : topic == 'Continue previous story' && _storyState.isNotEmpty
+      ? 'Continue the saved interactive story and ask what I do next.'
+      : 'Start a speaking practice about $topic.';
+
   Future<void> _resumeAfterFailure(
     int generation,
     String? topic,
@@ -297,7 +358,7 @@ class ConversationCubit extends Cubit<ConversationState> {
       ),
     );
     try {
-      await voice.recover();
+      await voice.recover().timeout(const Duration(seconds: 10));
     } catch (_) {}
     await Future<void>.delayed(const Duration(seconds: 3));
     if (generation == _generation && !isClosed) {
@@ -341,7 +402,7 @@ class ConversationCubit extends Cubit<ConversationState> {
           ),
         );
         try {
-          await voice.recoverSpeech();
+          await voice.recoverSpeech().timeout(const Duration(seconds: 10));
         } catch (_) {}
         await Future<void>.delayed(
           Duration(seconds: [2, 4, 8, 16, 30][(failures - 1).clamp(0, 4)]),
@@ -414,13 +475,18 @@ class ConversationCubit extends Cubit<ConversationState> {
     ++_generation;
     _request?.cancel('Session stopped');
     _timer?.cancel();
-    await voice.stop();
+    try {
+      await voice.stop().timeout(const Duration(seconds: 5));
+    } catch (_) {}
     final duration = _startedAt == null
         ? Duration.zero
         : DateTime.now().difference(_startedAt!);
     if (duration.inSeconds > 0) {
-      await store.addPractice(duration, state.turns, chapters: _chapters);
+      await _tryLocalWrite(
+        () => store.addPractice(duration, state.turns, chapters: _chapters),
+      );
     }
+    await _tryLocalWrite(store.clearSessionResume);
     _startedAt = null;
     emit(
       state.copyWith(
@@ -435,6 +501,22 @@ class ConversationCubit extends Cubit<ConversationState> {
       .toString()
       .replaceFirst('Bad state: ', '')
       .replaceFirst('FormatException: ', '');
+
+  Future<T?> _tryLocalRead<T>(Future<T> Function() read) async {
+    try {
+      return await read().timeout(const Duration(seconds: 5));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _tryLocalWrite(Future<void> Function() write) async {
+    try {
+      await write().timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Local progress failures must not end a live speaking session.
+    }
+  }
 
   @override
   Future<void> close() async {
