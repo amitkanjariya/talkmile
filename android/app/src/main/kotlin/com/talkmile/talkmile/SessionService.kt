@@ -36,6 +36,7 @@ class SessionService : Service() {
     private var pendingListenResult: MethodChannel.Result? = null
     private var partialTranscript = ""
     private var preferOnDeviceRecognizer = false
+    private var recognitionLocale = "en-IN"
     private var missedSpeechTurns = 0
     private var textToSpeech: TextToSpeech? = null
     private var ttsReady = false
@@ -162,10 +163,22 @@ class SessionService : Service() {
                         }
                         finishListening(partialTranscript)
                     } else {
-                        if (preferOnDeviceRecognizer &&
-                            (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
-                                error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ||
-                                error == SpeechRecognizer.ERROR_NETWORK ||
+                        if (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
+                            error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
+                            if (recognitionLocale == "en-IN") {
+                                // Some Android images do not ship an Indian-English
+                                // offline pack. Retry with Android's widely available
+                                // English model instead of repeatedly requesting the
+                                // unsupported locale while the screen is locked.
+                                recognitionLocale = "en-US"
+                                preferOnDeviceRecognizer = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                                    SpeechRecognizer.isOnDeviceRecognitionAvailable(applicationContext)
+                                Log.w(TAG, "Speech locale unavailable; retrying with $recognitionLocale")
+                            } else {
+                                preferOnDeviceRecognizer = false
+                            }
+                        } else if (preferOnDeviceRecognizer &&
+                            (error == SpeechRecognizer.ERROR_NETWORK ||
                                 error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT ||
                                 error == SpeechRecognizer.ERROR_SERVER ||
                                 error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED)) {
@@ -195,14 +208,14 @@ class SessionService : Service() {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                     RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, recognitionLocale)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOnDeviceRecognizer)
             }
             recognizer.startListening(intent)
             mainHandler.postDelayed(listeningTimeout, 55_000L)
-            Log.i(TAG, "Started ${if (preferOnDeviceRecognizer) "on-device" else "system"} recognition turn")
+            Log.i(TAG, "Started ${if (preferOnDeviceRecognizer) "on-device" else "system"} recognition turn ($recognitionLocale)")
         } catch (error: Exception) {
             Log.e(TAG, "Could not start speech recognition", error)
             finishListening(errorCode = SpeechRecognizer.ERROR_CLIENT,
